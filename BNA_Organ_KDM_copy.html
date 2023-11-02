@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>BNA_Organ_KDM</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="BNA_Organ_KDM_files/libs/clipboard/clipboard.min.js"></script>
+<script src="BNA_Organ_KDM_files/libs/quarto-html/quarto.js"></script>
+<script src="BNA_Organ_KDM_files/libs/quarto-html/popper.min.js"></script>
+<script src="BNA_Organ_KDM_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="BNA_Organ_KDM_files/libs/quarto-html/anchor.min.js"></script>
+<link href="BNA_Organ_KDM_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="BNA_Organ_KDM_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="BNA_Organ_KDM_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="BNA_Organ_KDM_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="BNA_Organ_KDM_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="fullcontent">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">BNA_Organ_KDM</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+</header>
+
+<p>This file runs Bayesian Network Analyses to see the effect on organ KDM, Bio Age and Brain Age on each other.</p>
+<p>Input: All DF’s</p>
+<p>Output: Bayesian Network Analyses results</p>
+<section id="read-in-libraries" class="level1">
+<h1>Read in Libraries</h1>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">#install.packages("flexsurv")</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co">#devtools::install_github("dayoonkwon/BioAge")</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">#| warning: false</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>root <span class="ot">&lt;-</span> <span class="st">"/Users/hansoochang/Drexel/ABCD/"</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(BioAge)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'dplyr'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:stats':
+
+    filter, lag</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggpubr)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Metrics)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(stats)</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(skimr)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(pcaPP)</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(stringr)</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(stats)</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(misty)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>|-------------------------------------|
+| misty 0.5.3 (2023-09-17)            |
+| Miscellaneous Functions T. Yanagida |
+|-------------------------------------|</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(emmeans)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(LSD)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggtext)</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(patchwork)</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+✔ forcats   1.0.0     ✔ readr     2.1.4
+✔ lubridate 1.9.3     ✔ tibble    3.2.1
+✔ purrr     1.0.2     ✔ tidyr     1.3.0</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::filter() masks stats::filter()
+✖ dplyr::lag()    masks stats::lag()
+ℹ Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all conflicts to become errors</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lavaan)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>This is lavaan 0.6-16
+lavaan is FREE software! Please report any bugs.</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(semTools)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code> 
+###############################################################################
+This is semTools 0.5-6
+All users of R (or SEM) are invited to submit functions or ideas for functions.
+###############################################################################
+
+Attaching package: 'semTools'
+
+The following object is masked from 'package:readr':
+
+    clipboard
+
+The following object is masked from 'package:misty':
+
+    kurtosis</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(semPlot)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(bnstruct)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: bitops
+Loading required package: igraph
+
+Attaching package: 'igraph'
+
+The following objects are masked from 'package:lubridate':
+
+    %--%, union
+
+The following objects are masked from 'package:purrr':
+
+    compose, simplify
+
+The following object is masked from 'package:tidyr':
+
+    crossing
+
+The following object is masked from 'package:tibble':
+
+    as_data_frame
+
+The following objects are masked from 'package:dplyr':
+
+    as_data_frame, groups, union
+
+The following objects are masked from 'package:stats':
+
+    decompose, spectrum
+
+The following object is masked from 'package:base':
+
+    union
+
+
+Attaching package: 'bnstruct'
+
+The following object is masked from 'package:tidyr':
+
+    complete</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(bnlearn)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'bnlearn'
+
+The following objects are masked from 'package:bnstruct':
+
+    impute, read.bif, read.dsc, read.net, shd, write.dsc
+
+The following objects are masked from 'package:igraph':
+
+    as.igraph, compare, degree, subgraph</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages("BiocManager")</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="co"># BiocManager::install("Rgraphviz")</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Rgraphviz)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: graph
+Loading required package: BiocGenerics
+
+Attaching package: 'BiocGenerics'
+
+The following object is masked from 'package:bnlearn':
+
+    score
+
+The following objects are masked from 'package:igraph':
+
+    normalize, path, union
+
+The following objects are masked from 'package:lubridate':
+
+    intersect, setdiff, union
+
+The following objects are masked from 'package:dplyr':
+
+    combine, intersect, setdiff, union
+
+The following objects are masked from 'package:stats':
+
+    IQR, mad, sd, var, xtabs
+
+The following objects are masked from 'package:base':
+
+    anyDuplicated, aperm, append, as.data.frame, basename, cbind,
+    colnames, dirname, do.call, duplicated, eval, evalq, Filter, Find,
+    get, grep, grepl, intersect, is.unsorted, lapply, Map, mapply,
+    match, mget, order, paste, pmax, pmax.int, pmin, pmin.int,
+    Position, rank, rbind, Reduce, rownames, sapply, setdiff, sort,
+    table, tapply, union, unique, unsplit, which.max, which.min
+
+
+Attaching package: 'graph'
+
+The following objects are masked from 'package:bnlearn':
+
+    degree, nodes, nodes&lt;-
+
+The following objects are masked from 'package:igraph':
+
+    degree, edges, intersection
+
+The following object is masked from 'package:stringr':
+
+    boundary
+
+Loading required package: grid
+
+Attaching package: 'Rgraphviz'
+
+The following object is masked from 'package:bnstruct':
+
+    name</code></pre>
+</div>
+</div>
+</section>
+<section id="read-in-data" class="level1">
+<h1>Read in Data</h1>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>all_kdm_sem_base <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="fu">paste0</span>(root, <span class="st">"Version5.0_Exported_Data/all_kdm_sem_base.csv"</span>))</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>all_kdm_sem_gmv_4 <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="fu">paste0</span>(root, <span class="st">"Version5.0_Exported_Data/all_kdm_sem_gmv_4.csv"</span>))</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>all_kdm_sem_base_onlyAdvance <span class="ot">&lt;-</span> all_kdm_sem_base <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="fu">contains</span>(<span class="st">"advance"</span>))</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>all_kdm_sem_gmv_4_onlyAdvance <span class="ot">&lt;-</span> all_kdm_sem_gmv_4 <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="fu">contains</span>(<span class="st">"advance"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="forced-network" class="level1">
+<h1>Forced Network</h1>
+<section id="baseline" class="level2">
+<h2 class="anchored" data-anchor-id="baseline">Baseline</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Define DAG</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>dag_str <span class="ot">&lt;-</span> <span class="st">'[kdm_advance_brainage|kdm_advance_bioage][kdm_advance_bioage|kdm_advance_cv:kdm_advance_of:kdm_advance_ms:kdm_advance_im:kdm_advance_mb][kdm_advance_cv][kdm_advance_of][kdm_advance_ms][kdm_advance_im][kdm_advance_mb]'</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>dag <span class="ot">&lt;-</span> <span class="fu">model2network</span>(dag_str)</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="co"># P-values</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>pv_dag <span class="ot">&lt;-</span> <span class="fu">arc.strength</span>(dag, all_kdm_sem_base_onlyAdvance)</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a><span class="fu">strength.plot</span>(dag, <span class="at">strength =</span> pv_dag, <span class="at">main =</span> <span class="st">"pvalues"</span>, <span class="at">fontsize =</span> <span class="dv">30</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-3-1.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Deltas (BIC)</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>deltas_dag <span class="ot">&lt;-</span> <span class="fu">arc.strength</span>(dag, <span class="at">data =</span> all_kdm_sem_base_onlyAdvance <span class="sc">%&gt;%</span> na.omit, </span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>                           <span class="at">criterion =</span> <span class="st">"bic-g"</span>) </span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="fu">strength.plot</span>(dag, <span class="at">strength =</span> deltas_dag, <span class="at">main =</span> <span class="st">"score.deltas"</span>, <span class="at">fontsize =</span> <span class="dv">30</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-3-2.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Log-Likelihood Loss</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare this with learned model</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="fu">bn.cv</span>(all_kdm_sem_base_onlyAdvance, dag, <span class="at">algorithm.args =</span> <span class="fu">list</span>(<span class="at">score =</span> <span class="st">"bic"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+  k-fold cross-validation for Bayesian networks
+
+  target network structure:
+   [kdm_advance_cv][kdm_advance_im][kdm_advance_mb][kdm_advance_ms]
+   [kdm_advance_of]
+   [kdm_advance_bioage|kdm_advance_cv:kdm_advance_im:kdm_advance_mb:kdm_advance_ms:kdm_advance_of]
+   [kdm_advance_brainage|kdm_advance_bioage]
+  number of folds:                       10 
+  loss function:                         Log-Likelihood Loss (Gauss.) 
+  expected loss:                         8.749809 </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Learn Parameters using Bayesian Parameter Learning</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="co"># (Assuming all nodes represent continuous variables and follow Gaussian distributions)</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>fitted_dag <span class="ot">&lt;-</span> <span class="fu">bn.fit</span>(dag, <span class="at">data =</span> all_kdm_sem_base_onlyAdvance, <span class="at">method =</span> <span class="st">"mle-g"</span>)</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>fitted_dag</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+  Bayesian network parameters
+
+  Parameters of node kdm_advance_bioage (Gaussian distribution)
+
+Conditional density: kdm_advance_bioage | kdm_advance_cv + kdm_advance_im + kdm_advance_mb + kdm_advance_ms + kdm_advance_of
+Coefficients:
+   (Intercept)  kdm_advance_cv  kdm_advance_im  kdm_advance_mb  kdm_advance_ms  
+   -0.02272133      0.66684153      0.28175408      0.09671644      0.50332627  
+kdm_advance_of  
+   -0.05499973  
+Standard deviation of the residuals: 0.2923236 
+
+  Parameters of node kdm_advance_brainage (Gaussian distribution)
+
+Conditional density: kdm_advance_brainage | kdm_advance_bioage
+Coefficients:
+       (Intercept)  kdm_advance_bioage  
+       -0.74084105          0.06107251  
+Standard deviation of the residuals: 0.8907166 
+
+  Parameters of node kdm_advance_cv (Gaussian distribution)
+
+Conditional density: kdm_advance_cv
+Coefficients:
+(Intercept)  
+-0.01153185  
+Standard deviation of the residuals: 0.8164986 
+
+  Parameters of node kdm_advance_im (Gaussian distribution)
+
+Conditional density: kdm_advance_im
+Coefficients:
+(Intercept)  
+ -0.2717956  
+Standard deviation of the residuals: 1.866556 
+
+  Parameters of node kdm_advance_mb (Gaussian distribution)
+
+Conditional density: kdm_advance_mb
+Coefficients:
+(Intercept)  
+0.006161733  
+Standard deviation of the residuals: 2.286763 
+
+  Parameters of node kdm_advance_ms (Gaussian distribution)
+
+Conditional density: kdm_advance_ms
+Coefficients:
+(Intercept)  
+  0.0655508  
+Standard deviation of the residuals: 0.6152263 
+
+  Parameters of node kdm_advance_of (Gaussian distribution)
+
+Conditional density: kdm_advance_of
+Coefficients:
+(Intercept)  
+-0.03203899  
+Standard deviation of the residuals: 0.4886701 </code></pre>
+</div>
+</div>
+</section>
+<section id="year" class="level2">
+<h2 class="anchored" data-anchor-id="year">4 Year</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Define DAG</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>dag_str <span class="ot">&lt;-</span> <span class="st">'[kdm_advance_brainage|kdm_advance_bioage][kdm_advance_bioage|kdm_advance_cv:kdm_advance_of:kdm_advance_ms:kdm_advance_im:kdm_advance_mb][kdm_advance_cv][kdm_advance_of][kdm_advance_ms][kdm_advance_im][kdm_advance_mb]'</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>dag <span class="ot">&lt;-</span> <span class="fu">model2network</span>(dag_str)</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a><span class="co"># P-values</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>pv_dag <span class="ot">&lt;-</span> <span class="fu">arc.strength</span>(dag, all_kdm_sem_gmv_4_onlyAdvance)</span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="fu">strength.plot</span>(dag, <span class="at">strength =</span> pv_dag, <span class="at">main =</span> <span class="st">"pvalues"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Deltas (BIC)</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>deltas_dag <span class="ot">&lt;-</span> <span class="fu">arc.strength</span>(dag, <span class="at">data =</span> all_kdm_sem_gmv_4_onlyAdvance <span class="sc">%&gt;%</span> na.omit, </span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>                           <span class="at">criterion =</span> <span class="st">"bic-g"</span>) </span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="fu">strength.plot</span>(dag, <span class="at">strength =</span> deltas_dag, <span class="at">main =</span> <span class="st">"score.deltas"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-4-2.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Log-Likelihood Loss</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare this with learned model</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="fu">bn.cv</span>(all_kdm_sem_base_onlyAdvance, dag, <span class="at">algorithm.args =</span> <span class="fu">list</span>(<span class="at">score =</span> <span class="st">"bic"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+  k-fold cross-validation for Bayesian networks
+
+  target network structure:
+   [kdm_advance_cv][kdm_advance_im][kdm_advance_mb][kdm_advance_ms]
+   [kdm_advance_of]
+   [kdm_advance_bioage|kdm_advance_cv:kdm_advance_im:kdm_advance_mb:kdm_advance_ms:kdm_advance_of]
+   [kdm_advance_brainage|kdm_advance_bioage]
+  number of folds:                       10 
+  loss function:                         Log-Likelihood Loss (Gauss.) 
+  expected loss:                         8.721317 </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Learn Parameters using Bayesian Parameter Learning</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a><span class="co"># (Assuming all nodes represent continuous variables and follow Gaussian distributions)</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>fitted_dag <span class="ot">&lt;-</span> <span class="fu">bn.fit</span>(dag, <span class="at">data =</span> all_kdm_sem_gmv_4_onlyAdvance, <span class="at">method =</span> <span class="st">"mle-g"</span>)</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>fitted_dag</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+  Bayesian network parameters
+
+  Parameters of node kdm_advance_bioage (Gaussian distribution)
+
+Conditional density: kdm_advance_bioage | kdm_advance_cv + kdm_advance_im + kdm_advance_mb + kdm_advance_ms + kdm_advance_of
+Coefficients:
+   (Intercept)  kdm_advance_cv  kdm_advance_im  kdm_advance_mb  kdm_advance_ms  
+   -0.02272133      0.66684153      0.28175408      0.09671644      0.50332627  
+kdm_advance_of  
+   -0.05499973  
+Standard deviation of the residuals: 0.2923236 
+
+  Parameters of node kdm_advance_brainage (Gaussian distribution)
+
+Conditional density: kdm_advance_brainage | kdm_advance_bioage
+Coefficients:
+       (Intercept)  kdm_advance_bioage  
+       -1.55334875          0.08368734  
+Standard deviation of the residuals: 0.9572866 
+
+  Parameters of node kdm_advance_cv (Gaussian distribution)
+
+Conditional density: kdm_advance_cv
+Coefficients:
+(Intercept)  
+-0.01153185  
+Standard deviation of the residuals: 0.8164986 
+
+  Parameters of node kdm_advance_im (Gaussian distribution)
+
+Conditional density: kdm_advance_im
+Coefficients:
+(Intercept)  
+ -0.2717956  
+Standard deviation of the residuals: 1.866556 
+
+  Parameters of node kdm_advance_mb (Gaussian distribution)
+
+Conditional density: kdm_advance_mb
+Coefficients:
+(Intercept)  
+0.006161733  
+Standard deviation of the residuals: 2.286763 
+
+  Parameters of node kdm_advance_ms (Gaussian distribution)
+
+Conditional density: kdm_advance_ms
+Coefficients:
+(Intercept)  
+  0.0655508  
+Standard deviation of the residuals: 0.6152263 
+
+  Parameters of node kdm_advance_of (Gaussian distribution)
+
+Conditional density: kdm_advance_of
+Coefficients:
+(Intercept)  
+-0.03203899  
+Standard deviation of the residuals: 0.4886701 </code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="learned-parameters" class="level1">
+<h1>Learned Parameters</h1>
+<section id="learning-parameters" class="level2">
+<h2 class="anchored" data-anchor-id="learning-parameters">Learning Parameters</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Learn the Network Structure from Data using the Grow-Shrink Algorithm</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Baseline </span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>bn.gs <span class="ot">&lt;-</span> <span class="fu">gs</span>(all_kdm_sem_base_onlyAdvance)</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>bn.iamb <span class="ot">&lt;-</span> <span class="fu">iamb</span>(all_kdm_sem_base_onlyAdvance)</span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>bn.fast.iamb <span class="ot">&lt;-</span> <span class="fu">fast.iamb</span>(all_kdm_sem_base_onlyAdvance)</span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>bn.inter.iamb <span class="ot">&lt;-</span> <span class="fu">inter.iamb</span>(all_kdm_sem_base_onlyAdvance)</span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>bn.mmpc <span class="ot">&lt;-</span> <span class="fu">mmpc</span>(all_kdm_sem_base_onlyAdvance)</span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Baseline to 4 year</span></span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>bn.gs<span class="fl">.4</span>y <span class="ot">&lt;-</span> <span class="fu">gs</span>(all_kdm_sem_gmv_4_onlyAdvance)</span>
+<span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a>bn.iamb<span class="fl">.4</span>y <span class="ot">&lt;-</span> <span class="fu">iamb</span>(all_kdm_sem_gmv_4_onlyAdvance)</span>
+<span id="cb33-12"><a href="#cb33-12" aria-hidden="true" tabindex="-1"></a>bn.fast.iamb<span class="fl">.4</span>y <span class="ot">&lt;-</span> <span class="fu">fast.iamb</span>(all_kdm_sem_gmv_4_onlyAdvance)</span>
+<span id="cb33-13"><a href="#cb33-13" aria-hidden="true" tabindex="-1"></a>bn.inter.iamb<span class="fl">.4</span>y <span class="ot">&lt;-</span> <span class="fu">inter.iamb</span>(all_kdm_sem_gmv_4_onlyAdvance)</span>
+<span id="cb33-14"><a href="#cb33-14" aria-hidden="true" tabindex="-1"></a>bn.mmpc<span class="fl">.4</span>y <span class="ot">&lt;-</span> <span class="fu">mmpc</span>(all_kdm_sem_gmv_4_onlyAdvance)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="visual-comparison" class="level2">
+<h2 class="anchored" data-anchor-id="visual-comparison">Visual Comparison</h2>
+<section id="baseline-1" class="level3">
+<h3 class="anchored" data-anchor-id="baseline-1">Baseline</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bn.gs, <span class="at">main =</span> <span class="st">"Grow-Shrink"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-6-1.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bn.iamb, <span class="at">main =</span> <span class="st">"IAMB"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-6-2.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bn.fast.iamb, <span class="at">main =</span> <span class="st">"Fast IAMB"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-6-3.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bn.inter.iamb, <span class="at">main =</span> <span class="st">"Interleaved IAMB"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-6-4.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+<section id="baseline-to-4-year" class="level3">
+<h3 class="anchored" data-anchor-id="baseline-to-4-year">Baseline to 4 year</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bn.gs<span class="fl">.4</span>y, <span class="at">main =</span> <span class="st">"Grow-Shrink"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bn.iamb<span class="fl">.4</span>y, <span class="at">main =</span> <span class="st">"IAMB"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-7-2.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bn.fast.iamb<span class="fl">.4</span>y, <span class="at">main =</span> <span class="st">"Fast IAMB"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-7-3.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bn.inter.iamb<span class="fl">.4</span>y, <span class="at">main =</span> <span class="st">"Interleaved IAMB"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-7-4.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+</section>
+<section id="choosing-learning-strategy" class="level2">
+<h2 class="anchored" data-anchor-id="choosing-learning-strategy">Choosing Learning Strategy</h2>
+<p>Cross-validation is a standard way to obtain unbiased estimates of a model’s goodness of fit. By comparing such estimates for different learning strategies (different combinations of learning algorithms, fitting techniques and the respective parameters) we can choose the optimal one for the data at hand in a principled way. ### Baseline</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>bn.cv.gs <span class="ot">&lt;-</span> <span class="fu">bn.cv</span>(<span class="at">data =</span> all_kdm_sem_base_onlyAdvance <span class="sc">%&gt;%</span> na.omit, <span class="at">bn =</span> <span class="st">"gs"</span>, <span class="at">runs =</span> <span class="dv">10</span>, <span class="at">k =</span> <span class="dv">3</span>)</span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>bn.cv.iamb <span class="ot">&lt;-</span> <span class="fu">bn.cv</span>(<span class="at">data =</span> all_kdm_sem_base_onlyAdvance <span class="sc">%&gt;%</span> na.omit, <span class="at">bn =</span> <span class="st">"iamb"</span>, <span class="at">runs =</span> <span class="dv">10</span>, <span class="at">k =</span> <span class="dv">3</span>)</span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>bn.cv.fast.iamb <span class="ot">&lt;-</span> <span class="fu">bn.cv</span>(<span class="at">data =</span> all_kdm_sem_base_onlyAdvance <span class="sc">%&gt;%</span> na.omit, </span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a>                         <span class="at">bn =</span> <span class="st">"fast.iamb"</span>, <span class="at">runs =</span> <span class="dv">10</span>, <span class="at">k =</span> <span class="dv">3</span>)</span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a>bn.cv.inter.iamb <span class="ot">&lt;-</span> <span class="fu">bn.cv</span>(<span class="at">data =</span> all_kdm_sem_base_onlyAdvance <span class="sc">%&gt;%</span> na.omit, </span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a>                  <span class="at">bn =</span> <span class="st">"inter.iamb"</span>, <span class="at">runs =</span> <span class="dv">10</span>, <span class="at">k =</span> <span class="dv">2</span>)</span>
+<span id="cb42-7"><a href="#cb42-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb42-8"><a href="#cb42-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bn.cv.gs, bn.cv.iamb, bn.cv.fast.iamb, bn.cv.inter.iamb, </span>
+<span id="cb42-9"><a href="#cb42-9" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="fu">c</span>(<span class="st">"gs"</span>, <span class="st">"iamb"</span>, <span class="st">"fast.iamb"</span>, <span class="st">"inter.iamb"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>It seems that iamb has the highest log-likelihood loss and with the most stable variance.</p>
+<section id="baseline-to-4-year-1" class="level3">
+<h3 class="anchored" data-anchor-id="baseline-to-4-year-1">Baseline to 4 year</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>bn.cv.gs<span class="fl">.4</span>y <span class="ot">&lt;-</span> <span class="fu">bn.cv</span>(<span class="at">data =</span> all_kdm_sem_gmv_4_onlyAdvance <span class="sc">%&gt;%</span> na.omit, <span class="at">bn =</span> <span class="st">"gs"</span>, <span class="at">runs =</span> <span class="dv">10</span>, <span class="at">k =</span> <span class="dv">5</span>)</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>bn.cv.iamb<span class="fl">.4</span>y <span class="ot">&lt;-</span> <span class="fu">bn.cv</span>(<span class="at">data =</span> all_kdm_sem_gmv_4_onlyAdvance <span class="sc">%&gt;%</span> na.omit, <span class="at">bn =</span> <span class="st">"iamb"</span>, <span class="at">runs =</span> <span class="dv">10</span>, <span class="at">k =</span> <span class="dv">5</span>)</span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a>bn.cv.fast.iamb<span class="fl">.4</span>y <span class="ot">&lt;-</span> <span class="fu">bn.cv</span>(<span class="at">data =</span> all_kdm_sem_gmv_4_onlyAdvance <span class="sc">%&gt;%</span> na.omit, </span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>                         <span class="at">bn =</span> <span class="st">"fast.iamb"</span>, <span class="at">runs =</span> <span class="dv">10</span>, <span class="at">k =</span> <span class="dv">5</span>)</span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>bn.cv.inter.iamb<span class="fl">.4</span>y <span class="ot">&lt;-</span> <span class="fu">bn.cv</span>(<span class="at">data =</span> all_kdm_sem_gmv_4_onlyAdvance <span class="sc">%&gt;%</span> na.omit, </span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>                  <span class="at">bn =</span> <span class="st">"inter.iamb"</span>, <span class="at">runs =</span> <span class="dv">10</span>, <span class="at">k =</span> <span class="dv">5</span>)</span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bn.cv.gs<span class="fl">.4</span>y, bn.cv.iamb<span class="fl">.4</span>y, bn.cv.fast.iamb<span class="fl">.4</span>y, bn.cv.inter.iamb<span class="fl">.4</span>y, </span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="fu">c</span>(<span class="st">"gs"</span>, <span class="st">"iamb"</span>, <span class="st">"fast.iamb"</span>, <span class="st">"inter.iamb"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>Generally, the resulst are pretty close, but gs seems to be have the most stable and lowest log-likelihood loss</p>
+</section>
+</section>
+<section id="set-direction-of-undirected-arcs" class="level2">
+<h2 class="anchored" data-anchor-id="set-direction-of-undirected-arcs">Set Direction of Undirected Arcs</h2>
+<section id="baseline-2" class="level3">
+<h3 class="anchored" data-anchor-id="baseline-2">Baseline</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb44"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>bn.iamb.set <span class="ot">&lt;-</span> <span class="fu">cextend</span>(bn.iamb)</span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bn.iamb.set)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-10-1.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>pv.iamb.gs <span class="ot">&lt;-</span> <span class="fu">arc.strength</span>(bn.iamb.set, <span class="at">data =</span> all_kdm_sem_base_onlyAdvance)</span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>deltas.iamb.gs <span class="ot">&lt;-</span> <span class="fu">arc.strength</span>(bn.iamb.set, </span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>                             <span class="at">data =</span> all_kdm_sem_base_onlyAdvance <span class="sc">%&gt;%</span> na.omit, </span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>                           <span class="at">criterion =</span> <span class="st">"bic-g"</span>) </span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a><span class="fu">strength.plot</span>(bn.iamb.set, <span class="at">strength =</span> pv.iamb.gs, <span class="at">main =</span> <span class="st">"pvalues"</span>, <span class="at">fontsize =</span> <span class="dv">30</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-10-2.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb46"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="fu">strength.plot</span>(bn.iamb.set, <span class="at">strength =</span> deltas.iamb.gs, <span class="at">main =</span> <span class="st">"score.deltas"</span>, <span class="at">fontsize =</span> <span class="dv">30</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-10-3.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Log-Likelihood Loss</span></span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare this with Forced Model</span></span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a><span class="fu">bn.cv</span>(all_kdm_sem_base_onlyAdvance, bn.iamb.set, <span class="at">algorithm.args =</span> <span class="fu">list</span>(<span class="at">score =</span> <span class="st">"aic"</span>), </span>
+<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a>      <span class="at">loss.args =</span> <span class="fu">list</span>(<span class="st">"logl-g"</span>), <span class="at">k =</span> <span class="dv">3</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+  k-fold cross-validation for Bayesian networks
+
+  target network structure:
+   [kdm_advance_of][kdm_advance_im][kdm_advance_mb][kdm_advance_brainage]
+   [kdm_advance_ms|kdm_advance_im][kdm_advance_cv|kdm_advance_ms]
+   [kdm_advance_bioage|kdm_advance_cv:kdm_advance_ms:kdm_advance_im:kdm_advance_mb]
+  number of folds:                       3 
+  loss function:                         Log-Likelihood Loss (Gauss.) 
+  expected loss:                         8.778205 </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bn.cv</span>(all_kdm_sem_base_onlyAdvance, dag, <span class="at">algorithm.args =</span> <span class="fu">list</span>(<span class="at">score =</span> <span class="st">"aic"</span>), </span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>      <span class="at">loss.args =</span> <span class="fu">list</span>(<span class="st">"logl-g"</span>), <span class="at">k =</span> <span class="dv">3</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+  k-fold cross-validation for Bayesian networks
+
+  target network structure:
+   [kdm_advance_cv][kdm_advance_im][kdm_advance_mb][kdm_advance_ms]
+   [kdm_advance_of]
+   [kdm_advance_bioage|kdm_advance_cv:kdm_advance_im:kdm_advance_mb:kdm_advance_ms:kdm_advance_of]
+   [kdm_advance_brainage|kdm_advance_bioage]
+  number of folds:                       3 
+  loss function:                         Log-Likelihood Loss (Gauss.) 
+  expected loss:                         8.721348 </code></pre>
+</div>
+</div>
+<p>There’s not much difference between the learned model and the forced model</p>
+</section>
+<section id="baseline-to-4-year-2" class="level3">
+<h3 class="anchored" data-anchor-id="baseline-to-4-year-2">Baseline to 4 year</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb51"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>bn.gs<span class="fl">.4</span>y.set <span class="ot">&lt;-</span> <span class="fu">cextend</span>(bn.gs<span class="fl">.4</span>y)</span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bn.gs<span class="fl">.4</span>y.set)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-11-1.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb52"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>pv.bn.gs<span class="fl">.4</span>y <span class="ot">&lt;-</span> <span class="fu">arc.strength</span>(bn.gs<span class="fl">.4</span>y.set, <span class="at">data =</span> all_kdm_sem_gmv_4_onlyAdvance)</span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a>deltas.bn.gs<span class="fl">.4</span>y <span class="ot">&lt;-</span> <span class="fu">arc.strength</span>(bn.gs<span class="fl">.4</span>y.set, </span>
+<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>                             <span class="at">data =</span> all_kdm_sem_gmv_4_onlyAdvance <span class="sc">%&gt;%</span> na.omit, </span>
+<span id="cb52-4"><a href="#cb52-4" aria-hidden="true" tabindex="-1"></a>                           <span class="at">criterion =</span> <span class="st">"bic-g"</span>) </span>
+<span id="cb52-5"><a href="#cb52-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb52-6"><a href="#cb52-6" aria-hidden="true" tabindex="-1"></a><span class="fu">strength.plot</span>(bn.gs<span class="fl">.4</span>y.set, <span class="at">strength =</span> pv.bn.gs<span class="fl">.4</span>y, <span class="at">main =</span> <span class="st">"pvalues"</span>, <span class="at">fontsize =</span> <span class="dv">30</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-11-2.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb53"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="fu">strength.plot</span>(bn.gs<span class="fl">.4</span>y.set, <span class="at">strength =</span> deltas.bn.gs<span class="fl">.4</span>y, <span class="at">main =</span> <span class="st">"score.deltas"</span>, <span class="at">fontsize =</span> <span class="dv">30</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="BNA_Organ_KDM_files/figure-html/unnamed-chunk-11-3.png" class="img-fluid" width="672"></p>
+</div>
+<div class="sourceCode cell-code" id="cb54"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Log-Likelihood Loss</span></span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare this with Forced Model</span></span>
+<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a><span class="fu">bn.cv</span>(all_kdm_sem_gmv_4_onlyAdvance, bn.gs<span class="fl">.4</span>y.set, <span class="at">algorithm.args =</span> <span class="fu">list</span>(<span class="at">score =</span> <span class="st">"aic"</span>), </span>
+<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a>      <span class="at">loss.args =</span> <span class="fu">list</span>(<span class="st">"logl-g"</span>), <span class="at">k =</span> <span class="dv">5</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+  k-fold cross-validation for Bayesian networks
+
+  target network structure:
+   [kdm_advance_of][kdm_advance_im][kdm_advance_mb][kdm_advance_brainage]
+   [kdm_advance_ms|kdm_advance_im][kdm_advance_cv|kdm_advance_ms]
+   [kdm_advance_bioage|kdm_advance_cv:kdm_advance_ms:kdm_advance_im:kdm_advance_mb]
+  number of folds:                       5 
+  loss function:                         Log-Likelihood Loss (Gauss.) 
+  expected loss:                         8.817691 </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb56"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bn.cv</span>(all_kdm_sem_gmv_4_onlyAdvance, dag, <span class="at">algorithm.args =</span> <span class="fu">list</span>(<span class="at">score =</span> <span class="st">"aic"</span>), </span>
+<span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a>      <span class="at">loss.args =</span> <span class="fu">list</span>(<span class="st">"logl-g"</span>), <span class="at">k =</span> <span class="dv">5</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+  k-fold cross-validation for Bayesian networks
+
+  target network structure:
+   [kdm_advance_cv][kdm_advance_im][kdm_advance_mb][kdm_advance_ms]
+   [kdm_advance_of]
+   [kdm_advance_bioage|kdm_advance_cv:kdm_advance_im:kdm_advance_mb:kdm_advance_ms:kdm_advance_of]
+   [kdm_advance_brainage|kdm_advance_bioage]
+  number of folds:                       5 
+  loss function:                         Log-Likelihood Loss (Gauss.) 
+  expected loss:                         8.803884 </code></pre>
+</div>
+</div>
+<p>Not much difference in expected loss either</p>
+</section>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>
