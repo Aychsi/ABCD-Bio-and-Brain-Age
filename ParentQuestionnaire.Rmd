@@ -1,0 +1,402 @@
+---
+title: "ParentQuestionnaire"
+output: pdf_document
+date: "2022-11-18"
+---
+
+# Libraries
+```{r}
+library(skimr)
+library(matrixStats)
+```
+
+
+# Read in data
+## Parent Survey
+```{r}
+#parent <- read.delim("/Users/hansoochang/Drexel/ABCD/data/abcd_ksad01.txt",sep="", fill = TRUE)
+
+# Version 5.1 Data
+parent <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.1/core/mental-health/mh_p_ksads_ss.csv")
+head(parent)
+
+# parent <- parent[-1,]# Take out first row
+
+# colnames(parent)
+
+parent[parent == ""] <- NA
+
+table(parent$eventname)
+
+# parentb <- parent[which(parent$eventname == "baseline_year_1_arm_1"), ]
+# parent1 <- parent[which(parent$eventname == "1_year_follow_up_y_arm_1"), ]
+# parent2 <- parent[which(parent$eventname == "2_year_follow_up_y_arm_1"), ]
+
+p_list <- c("src_subject_id", "eventname","ksads_1_843_p", "ksads_1_845_p", "ksads_1_844_p", 
+            "ksads_1_840_p", "ksads_1_841_p", "ksads_1_842_p", "ksads_1_847_p", 
+            "ksads_1_846_p", "ksads_2_837_p", "ksads_2_835_p", "ksads_2_836_p", 
+            "ksads_2_836_p", "ksads_2_831_p", "ksads_2_832_p", "ksads_2_830_p", 
+            "ksads_2_833_p", "ksads_2_834_p", "ksads_2_839_p", "ksads_2_838_p", 
+            "ksads_3_848_p", "ksads_4_851_p", "ksads_4_852_p", "ksads_4_826_p",
+            "ksads_4_827_p", "ksads_4_829_p", "ksads_4_828_p", "ksads_4_850_p",
+            "ksads_4_849_p", "ksads_5_906_p", "ksads_5_907_p", "ksads_5_857_p",
+            "ksads_5_858_p", "ksads_6_859_p", "ksads_6_860_p", "ksads_7_861_p",
+            "ksads_7_909_p", "ksads_7_910_p", "ksads_7_862_p", "ksads_8_864_p", 
+            "ksads_8_863_p", "ksads_8_912_p", "ksads_8_911_p", "ksads_9_868_p", 
+            "ksads_9_867_p", "ksads_10_869_p", "ksads_10_870_p", "ksads_11_917_p",
+            "ksads_11_918_p", "ksads_11_919_p", "ksads_11_920_p", "ksads_12_928_p",
+            "ksads_12_927_p", "ksads_12_925_p", "ksads_12_926_p", "ksads_13_939_p",
+            "ksads_13_938_p", "ksads_13_929_p", "ksads_13_934_p", "ksads_13_933_p", 
+            "ksads_13_932_p", "ksads_13_931_p", "ksads_13_930_p", "ksads_13_936_p",
+            "ksads_13_935_p", "ksads_13_937_p", "ksads_13_940_p", "ksads_13_943_p",
+            "ksads_13_942_p", "ksads_13_944_p", "ksads_13_941_p", "ksads_14_856_p",
+            "ksads_14_855_p", "ksads_14_853_p", "ksads_14_854_p", "ksads_17_905_p",
+            "ksads_17_904_p", "ksads_18_903_p", "ksads_19_895_p", "ksads_19_896_p",
+            "ksads_19_891_p", "ksads_19_892_p", "ksads_20_893_p", "ksads_20_894_p", 
+            "ksads_20_874_p", "ksads_20_883_p", "ksads_20_872_p", "ksads_20_881_p", 
+            "ksads_20_889_p", "ksads_20_890_p", "ksads_20_887_p", "ksads_20_878_p",
+            "ksads_20_877_p", "ksads_20_886_p", "ksads_20_875_p", "ksads_20_884_p",
+            "ksads_20_876_p", "ksads_20_885_p", "ksads_20_879_p", "ksads_20_888_p",
+            "ksads_20_873_p", "ksads_20_882_p", "ksads_20_880_p", "ksads_20_871_p",
+            "ksads_21_923_p", "ksads_21_924_p", "ksads_21_921_p", "ksads_21_922_p",
+            "ksads_23_946_p", "ksads_25_916_p", "ksads_25_915_p", "ksads_25_866_p", "ksads_25_865_p")
+
+# Parent Survey 
+parent %>%
+  select(one_of(p_list)) %>%
+  mutate_at(vars(ksads_1_843_p:ksads_25_865_p), as.factor) %>%
+  skim()
+
+p_ksads <- parent %>%
+  select(one_of(p_list)) %>%
+  mutate_at(vars(ksads_1_843_p:ksads_25_865_p), as.factor)
+```
+
+
+## Child Survey
+```{r}
+
+# Version 5.1 Data
+child <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.1/core/mental-health/mh_y_ksads_ss.csv")
+
+# child <- child[-1,]# Take out first row
+
+child[child == ""] <- NA
+
+table(child$eventname)
+
+
+child %>% select(src_subject_id,eventname,
+                 ksads_4_826_t:ksads_22_970_t, ksads2_19_849_t:ksads2_19_854_t, 
+                 ksads2_21_881_t:ksads2_21_885_t, ksads2_22_929_t:ksads2_22_930_t,
+                 ksads2_23_919_t:ksads2_23_926_t, ksads2_24_927_t:ksads2_23_918_t, 
+                 ksads2_25_823_t:ksads2_25_876_t, ksads2_23_905_t:ksads2_23_917_t,
+                 ksads2_20_843_t:ksads2_20_842_t, ksads2_20_844_t:ksads2_20_852_t,
+                 ksads2_5_814_t:ksads2_5_867_t, ksads2_6_817_t:ksads2_6_868_t, ksads2_4_807_t,
+                 ksads2_4_805_t:ksads2_4_806_t, ksads2_4_808_t, ksads2_8_821_t:ksads2_8_872_t,
+                 ksads2_9_825_t:ksads2_9_826_t, ksads2_7_870_t, ksads2_7_819_t:ksads2_7_869_t,
+                 ksads2_1_796_t, ksads2_1_790_t:ksads2_1_795_t, ksads2_1_797_t,
+                 ksads2_2_803_t:ksads2_2_933_t, ksads2_3_804_t:ksads2_2_802_t,
+                 ksads2_2_798_t:ksads2_15_860_t, ksads2_15_859_t, ksads2_14_811_t, 
+                 ksads2_14_809_t:ksads2_14_810_t, ksads2_14_812_t:ksads2_14_813_t, 
+                 ksads2_18_861_t:ksads2_18_863_t, ksads2_16_855_t:ksads2_16_858_t, ksads2_17_864_t,
+                 ksads2_17_865_t, ksads2_11_877_t:ksads2_11_880_t, ksads2_12_886_t:ksads2_12_889_t,
+                 ksads2_10_827_t:ksads2_10_874_t, ksads2_13_904_t, ksads2_13_902_t, 
+                 ksads2_13_890_t:ksads2_13_1000_t)  %>%
+  mutate_at(vars(ksads_4_826_t:ksads2_13_1000_t), as.factor) %>%
+  skim()
+```
+
+
+
+### CBCL ###
+
+t-score is total score, with a higher score indicating more depressive symptoms
+```{r}
+cbcl <- read.delim("/Users/hansoochang/Drexel/ABCD/data/abcd_cbcls01.txt", sep="", fill = TRUE)
+
+skim(cbcl)
+
+```
+
+## Get only total scores
+```{r}
+cbcl_t <- cbcl %>% dplyr::select(contains(c("_t", "subjectkey", "eventname", "interview_age")))
+cbcl_t <- cbcl_t[-1, ]
+
+skim(cbcl_t)
+```
+
+The broadband Internalizing Domain is a measure of emotional problems and contains three syndrome scales: Anxious/Depressed, Withdrawn/Depressed, and Somatic Complaints. The broadband Externalizing Domain measures behavioral problems and contains the Rule Breaking Behavior and Aggressive Behavior syndrome scales. Three other syndrome scales do not belong to either broadband scale: Social Problems, Thought Problems, and Attention Problems.
+
+“Clinically significant” elevations are indicated by T-scores ≥ 64 on the broadband scales and ≥70 on the syndrome scales. “Borderline” elevations range from 60 to 63 and 65 to 69 on the broadband and syndrome scales, respectively.
+
+
+# Subset BA patients
+## Biological Age
+```{r}
+bm <- read.csv("/Users/hansoochang/Drexel/ABCD/data/biomarkers.csv")
+head(bm)
+head(cbcl_t)
+
+bm_cbcl <- merge(bm, cbcl_t, by.x = c("subjectkey", "eventname.y"), by.y = c("subjectkey", "eventname"))
+
+# remove some unnecessary columns
+bm_cbcl <- subset(bm_cbcl, select = -c(`cbcl_scr_syn_thought_m`, `cbcl_scr_syn_thought_nm`
+                                       , `cbcl_scr_syn_thought_r`,`cbcl_scr_syn_totprob_m`,
+                                       `cbcl_scr_syn_totprob_nm`, `cbcl_scr_syn_totprob_r`))
+
+skim(bm_cbcl)
+```
+
+# Brain Age
+## GMV
+```{r}
+### Desikan Atlas
+### CBCL ###
+# bm_brain <- read.csv("/Users/hansoochang/Drexel/ABCD/data/smrip_gmv_y2.csv")
+bm_brain <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.1/core/imaging/mri_y_smr_vol_dsk.csv")
+head(bm_brain)
+head(cbcl_t)
+
+cbcl_t$src_subject_id <- cbcl_t$subjectkey
+
+# GMV and CBCL Merge
+bm_brain_cbcl <- merge(bm_brain, cbcl_t, by = c("src_subject_id", "eventname"))
+bm_brain_cbcl %>% filter(eventname == "baseline_year_1_arm_1")
+
+# GMV and KSADS merge
+bm_brain_ksads <- merge(bm_brain, p_ksads, by = c("src_subject_id", "eventname"))
+
+# remove some unnecessary columns
+bm_brain_cbcl <- subset(bm_brain_cbcl, select = -c(`cbcl_scr_syn_thought_m`, `cbcl_scr_syn_thought_nm`
+                                       , `cbcl_scr_syn_thought_r`,`cbcl_scr_syn_totprob_m`,
+                                       `cbcl_scr_syn_totprob_nm`, `cbcl_scr_syn_totprob_r`))
+
+
+
+
+### Destrieux Parcellation
+
+# bm_brain <- read.csv("/Users/hansoochang/Drexel/ABCD/data/stand_dest_vol_y2.csv")
+# head(bm_brain)
+# head(cbcl_t)
+# 
+# bm_brain_cbcl <- merge(bm_brain, cbcl_t, by = c("subjectkey", "eventname"))
+# 
+# # remove some unnecessary columns
+# bm_brain_cbcl <- subset(bm_brain_cbcl, select = -c(`cbcl_scr_syn_thought_m`, `cbcl_scr_syn_thought_nm`
+#                                        , `cbcl_scr_syn_thought_r`,`cbcl_scr_syn_totprob_m`,
+#                                        `cbcl_scr_syn_totprob_nm`, `cbcl_scr_syn_totprob_r`))
+# 
+# skim(bm_brain_cbcl)
+```
+
+# Cortical Thickness
+```{r}
+bm_cortthick <- read.csv("/Users/hansoochang/Drexel/ABCD/data/smrip_cortthick_y2.csv")
+#head(bm_brain)
+#head(cbcl_t)
+
+bm_cortthick_cbcl <- merge(bm_cortthick, cbcl_t, by = c("subjectkey", "eventname"))
+
+# remove some unnecessary columns
+bm_cortthick_cbcl <- subset(bm_cortthick_cbcl, select = -c(`cbcl_scr_syn_thought_m`, `cbcl_scr_syn_thought_nm`
+                                       , `cbcl_scr_syn_thought_r`,`cbcl_scr_syn_totprob_m`,
+                                       `cbcl_scr_syn_totprob_nm`, `cbcl_scr_syn_totprob_r`))
+
+skim(bm_cortthick_cbcl)
+```
+
+
+
+# Complete cases 
+## Bio Age
+```{r}
+
+bm_cbcl <- bm_cbcl[complete.cases(bm_cbcl),]
+bm_cbcl[, 37:56] <- as.numeric(unlist(bm_cbcl[, 37:56]))
+bm_cbcl[, 37:56]
+
+```
+
+## Brain Age
+# GMV
+```{r}
+bm_brain_cbcl %>% filter(eventname == "baseline_year_1_arm_1") %>% skim()
+bm_brain_cbcl %>% filter(eventname == "baseline_year_1_arm_1")
+# CBCL
+bm_brain_cbcl[bm_brain_cbcl == ""] <- NA
+bm_brain_cbcl <- bm_brain_cbcl[complete.cases(bm_brain_cbcl),]
+skim(bm_brain_cbcl) # 18457
+
+```
+
+
+# Cortical Thickness
+```{r}
+bm_cortthick_cbcl[bm_cortthick_cbcl == ""] <- NA
+bm_cortthick_cbcl <- bm_cortthick_cbcl[complete.cases(bm_cortthick_cbcl),]
+skim(bm_cortthick_cbcl) # 5383
+
+```
+
+
+Clinical range is above t score of 67
+https://link.springer.com/article/10.1007/s10862-010-9198-1
+
+Clinical range is above t score of 60...
+https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0250235#pone.0250235.ref043
+
+Clinical cutoff is greater than 66
+https://osf.io/gzybv
+
+# Find all that are above t-score of 67
+## Bio Age
+```{r}
+library(Hmisc)
+bm_cbcl_t <- bm_cbcl[, c(1:2, 37:56)]
+summary(bm_cbcl_t)
+bm_cbcl_t_bin <- ifelse(bm_cbcl_t[, -c(1:2)] > 67, 1, 0)
+bm_cbcl_t_bin <- cbind(bm_cbcl_t[,1:2], bm_cbcl_t_bin)
+
+as.data.frame(mapply(table, as.data.frame(bm_cbcl_t_bin)))
+
+hist.data.frame(bm_cbcl_t[1:10])
+hist.data.frame(bm_cbcl_t[11:20])
+
+```
+
+## Brain Age
+# GMV
+```{r}
+# CBCL
+colnames(bm_brain_cbcl)
+bm_brain_cbcl_t <- bm_brain_cbcl %>% select(contains(c("subjectkey", "eventname", "cbcl")))
+bm_brain_cbcl_t
+
+bm_brain_cbcl_t_bin <- ifelse(bm_brain_cbcl_t[, -c(1:2)] > 67, 1, 0)
+bm_brain_cbcl_t_bin <- cbind(bm_brain_cbcl_t[,1:2], bm_brain_cbcl_t_bin)
+
+bm_brain_cbcl_t_bin <- ifelse(bm_brain_cbcl %>% select(contains(c("cbcl"))) > 67, 1, 0)
+bm_brain_cbcl_t_bin <- cbind(bm_brain_cbcl %>% select(contains(c("subjectkey", "eventname", "smri"))), bm_brain_cbcl_t_bin)
+
+as.data.frame(bm_brain_cbcl_t_bin)
+
+
+# KSADS
+
+
+```
+
+
+# distributions of cbcl
+```{r}
+cbcl_list <- colnames(bm_brain_cbcl_t %>% select(contains("cbcl")))
+bm_brain_cbcl_t_num <- bm_brain_cbcl_t %>% mutate_at(vars(contains("cbcl")), as.numeric)
+
+for (cbcl in 1:length(cbcl_list)) {
+  hist(bm_brain_cbcl_t_num[, cbcl_list[cbcl]], xlab = cbcl_list[cbcl])
+}
+
+```
+
+
+
+# Cortical Thickness
+```{r}
+colnames(bm_cortthick_cbcl)
+bm_cortthick_cbcl_t <- bm_cortthick_cbcl %>% select(contains(c("subjectkey", "eventname", "cbcl")))
+bm_cortthick_cbcl_t
+
+bm_cortthick_cbcl_t_bin <- ifelse(bm_cortthick_cbcl_t[, -c(1:2)] > 67, 1, 0)
+bm_cortthick_cbcl_t_bin <- cbind(bm_cortthick_cbcl_t[,1:2], bm_cortthick_cbcl_t_bin)
+
+bm_cortthick_cbcl_t_bin
+```
+
+
+
+# Split into cognitively healthy vs. cognitively not healthy
+## Bio Age
+```{r}
+bm_cbcl_t_bin <- as.data.frame(bm_cbcl_t_bin)
+bm_cbcl_t_bin$count <- rowSums(bm_cbcl_t_bin == 1)
+
+healthy_cbcl <- bm_cbcl_t_bin[which(bm_cbcl_t_bin$count == 0), ]
+unhealthy_cbcl <- bm_cbcl_t_bin[which(bm_cbcl_t_bin$count != 0), ]
+
+
+nrow(healthy_cbcl)
+nrow(unhealthy_cbcl)
+
+write.csv(bm_cbcl_t_bin, "/Users/hansoochang/Drexel/ABCD/data/bm_cbcl_67.csv")
+write.csv(healthy_cbcl, file = "/Users/hansoochang/Drexel/ABCD/data/healthy_cbcl_67.csv")
+write.csv(unhealthy_cbcl, "/Users/hansoochang/Drexel/ABCD/data/unhealthy_cbcl_67.csv")
+```
+
+
+
+## Brain Age
+# GMV
+```{r}
+bm_brain_cbcl_t_bin <- as.data.frame(bm_brain_cbcl_t_bin)
+bm_brain_cbcl_t_bin$count <- rowSums(bm_brain_cbcl_t_bin == 1)
+
+healthy_cbcl_brain <- bm_brain_cbcl_t_bin[which(bm_brain_cbcl_t_bin$count == 0), ]
+unhealthy_cbcl_brain <- bm_brain_cbcl_t_bin[which(bm_brain_cbcl_t_bin$count != 0), ]
+
+
+nrow(healthy_cbcl_brain) # 4212
+nrow(unhealthy_cbcl_brain) # 949
+
+
+
+write.csv(bm_brain_cbcl_t_bin, "/Users/hansoochang/Drexel/ABCD/data/bm_brain_cbcl_67.csv")
+write.csv(healthy_cbcl_brain, file = "/Users/hansoochang/Drexel/ABCD/data/healthy_cbcl_brain_67.csv")
+write.csv(unhealthy_cbcl_brain, "/Users/hansoochang/Drexel/ABCD/data/unhealthy_cbcl_brain_67.csv")
+```
+
+# See densities between healhty and unhealthy
+```{r}
+all_cbcl_gmv <- rbind(healthy_cbcl_brain, unhealthy_cbcl_brain)
+all_cbcl_gmv$health <- ifelse(all_cbcl_gmv$count == 0, 0, 1)
+all_cbcl_gmv$health <- as.factor(all_cbcl_gmv$health)
+
+smri_list <- colnames(all_cbcl_gmv %>% select(contains("smri")))
+smri_list
+
+for (smri in smri_list) {
+  print(smri)
+  print(ggplot(all_cbcl_gmv, aes_string(smri, fill = "health"))
+   + geom_density(position = "identity", alpha = 0.5))
+}
+```
+
+
+
+
+
+
+# Cortical Thickness
+```{r}
+bm_cortthick_cbcl_t_bin <- as.data.frame(bm_cortthick_cbcl_t_bin)
+bm_cortthick_cbcl_t_bin$count <- rowSums(bm_cortthick_cbcl_t_bin == 1)
+
+healthy_cbcl_cortthick <- bm_cortthick_cbcl_t_bin[which(bm_cortthick_cbcl_t_bin$count == 0), ]
+unhealthy_cbcl_cortthick <- bm_cortthick_cbcl_t_bin[which(bm_cortthick_cbcl_t_bin$count != 0), ]
+
+
+nrow(healthy_cbcl_cortthick) # 4395
+nrow(unhealthy_cbcl_cortthick) # 988
+
+write.csv(bm_cortthick_cbcl_t_bin, "/Users/hansoochang/Drexel/ABCD/data/bm_cortthick_cbcl_67.csv")
+write.csv(healthy_cbcl_cortthick, file = "/Users/hansoochang/Drexel/ABCD/data/healthy_cbcl_cortthick_67.csv")
+write.csv(unhealthy_cbcl_cortthick, "/Users/hansoochang/Drexel/ABCD/data/unhealthy_cbcl_cortthick_67.csv")
+```
+
+
+
+
+
+

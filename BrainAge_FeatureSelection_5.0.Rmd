@@ -1,0 +1,670 @@
+---
+title: "BrainAge_FeatureSelection_5.0"
+output: html_document
+date: "2023-07-19"
+---
+
+This file performs feature selection for the GMV and Cortical Thickness ROIs necessary for Brain Age Prediction. Only the baseline values are needed since the model will be trained on the baseline data. Outputs the feature selected baseline dataframe as well as the feature selected dataframes at year 2 and year 4.
+
+Input:
++ gmv_base.csv
+
+Output:
++ gmv_sub_base.csv
++ gmv_sub_2year.csv
++ gmv_sub_4year.csv
+
+# Library
+```{r}
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(pcaPP)
+library(corrr)
+```
+
+
+# Read in Data
+```{r}
+gmv_base <- read.csv(paste0(root, "Version5.0_Exported_Data/gmv_base.csv"))
+gmv_2year <- read.csv(paste0(root, "Version5.0_Exported_Data/gmv_2year.csv"))
+gmv_4year <- read.csv(paste0(root, "Version5.0_Exported_Data/gmv_4year.csv"))
+
+thk_base <- read.csv(paste0(root, "Version5.0_Exported_Data/thk_base.csv"))
+thk_2year <- read.csv(paste0(root, "Version5.0_Exported_Data/thk_2year.csv"))
+thk_4year <- read.csv(paste0(root, "Version5.0_Exported_Data/thk_4year.csv"))
+
+```
+
+# Merge all together
+```{r}
+gmv_all <- rbind(gmv_base, rbind(gmv_2year, gmv_4year))
+thk_all <- rbind(thk_base, rbind(thk_2year, thk_4year))
+
+```
+
+
+
+# Check the relationship between CA and ROIs as a table
+## IMPORTANT: Kendall's Tau takes too long in regular cor() function. Use cor.fk from pcaPP package
+```{r}
+cor_mat_non_para <- function(df) {
+  
+  df$age <- as.numeric(df$interview_age)/12
+  df <- df[complete.cases(df),]
+  
+  cor_sub <- df %>% dplyr::select(contains(c("smri", "age")))
+  cor_sub <- cor_sub %>% dplyr::select(-interview_age)
+  
+  smri_list <- colnames(df %>% dplyr::select(contains("smri")))
+  cor_matrix <- cor.fk(cor_sub)
+  correlations <- cor_matrix["age", smri_list]
+  
+  # Matrix with highest absolute correlations between ROI and age
+  cor_mat_kendall <- sort(abs(correlations), decreasing = T)
+  
+  # Convert to Pearson's r and Cohen's d for effect size comparison
+  cor_mat_kendall_to_r <- sin(pi*0.5*cor_mat_kendall)
+  cor_mat_kendall_to_d <- 2*cor_mat_kendall_to_r/sqrt(1-cor_mat_kendall_to_r**2)
+  
+  return(cor_mat_kendall_to_r)
+}
+
+```
+
+# Check Correlations 
+## GMV
+```{r}
+
+gmv_healthy <- gmv_all %>% 
+  filter(phys_ment_health == 0) %>% 
+  filter(eventname == "baseline_year_1_arm_1")
+gmv_cors <- cor_mat_non_para(gmv_healthy)
+gmv_cors
+```
+
+## Cortical Thickness
+```{r}
+thk_healthy <- thk_all %>% 
+  filter(phys_ment_health == 0) %>% 
+  filter(eventname == "baseline_year_1_arm_1")
+thk_cors <- cor_mat_non_para(thk_healthy)
+thk_cors
+```
+
+
+# Run Another Round of Correlations Using Spearman 
+## GMV
+```{r}
+# Select the desired columns
+smri_list <- gmv_healthy %>% 
+  select(age, smri_vol_cdk_banksstslh:smri_vol_scs_subcorticalgv) %>%
+  names()
+
+# Calculate Kendall's tau correlations using corrr
+kendall_tau_results <- corrr::correlate(gmv_healthy[, smri_list], method = "spearman")
+
+# Extract Kendall's tau values for "column1"
+kendall_tau_results %>% select(term, age) %>% mutate(age = abs(age)) %>% arrange(-age)
+
+
+```
+
+## Cortical Thickness
+```{r}
+# Select the desired columns
+smri_list <- thk_healthy %>% 
+  select(age, smri_thick_cdk_banksstslh:smri_thick_cdk_mean) %>%
+  names()
+
+# Calculate Kendall's tau correlations using corrr
+kendall_tau_results <- corrr::correlate(thk_healthy[, smri_list], method = "spearman")
+
+# Extract Kendall's tau values for "column1"
+kendall_tau_results %>% select(term, age) %>% mutate(age = abs(age)) %>% arrange(-age)
+```
+
+
+
+# Select ROIs above the median correlation
+## GMV
+```{r}
+# Using Median here
+sub_rois_gmv <- as.data.frame(gmv_cors) %>% filter(gmv_cors < median(gmv_cors)) %>% select(-gmv_cors)
+sub_rois_gmv <- tibble::rownames_to_column(sub_rois_gmv, "a") 
+sub_rois_list_gmv <- sub_rois_gmv$a
+sub_rois_list_gmv
+gmv_sub <- gmv_all %>% select(-sub_rois_list_gmv)
+
+```
+
+# Cortical Thickness
+```{r}
+# Using Median here
+sub_rois_thk <- as.data.frame(thk_cors) %>% filter(thk_cors < median(thk_cors)) %>% select(-thk_cors)
+sub_rois_thk <- tibble::rownames_to_column(sub_rois_thk, "a") 
+sub_rois_list_thk <- sub_rois_thk$a
+sub_rois_list_thk
+thk_sub <- thk_all %>% select(-sub_rois_list_thk)
+
+```
+
+
+
+# Check Distributions
+## GMV
+```{r}
+smri_list <- colnames(gmv_sub %>% select(contains("smri")))
+
+for (smri in 1:length(smri_list)) {
+  hist(gmv_sub[, smri_list[smri]], xlab = smri_list[smri])
+}
+```
+
+## Cortical Thickness
+```{r}
+smri_list <- colnames(thk_sub %>% select(contains("smri")))
+
+for (smri in 1:length(smri_list)) {
+  hist(thk_sub[, smri_list[smri]], xlab = smri_list[smri])
+}
+```
+
+
+# Check Direction
+## GMV
+```{r}
+
+smri_list <- colnames(gmv_sub %>% select(contains("smri")))
+# Create a plot for each GMV
+for (smri in smri_list) {
+  p <- ggplot(gmv_sub %>% filter(eventname == "baseline_year_1_arm_1"), aes_string(x="age", y=smri)) +
+    geom_point(aes(color = as.factor(sex))) +
+    geom_smooth(method = "lm", aes(color = as.factor(sex)), se = FALSE) +
+    labs(x="Age", y=smri, title=paste("Scatterplot of Age vs", smri)) +
+    scale_color_manual(values = c("blue", "red"))
+  print(p)
+}
+
+```
+### Get correlations to see direction
+```{r}
+
+# Select the range of columns and chronological age column
+selected_cols <- c(paste0("smri_vol_cdk_ifpllh:smri_vol_scs_subcorticalgv"), "age")
+
+# Calculate correlation values
+correlation_with_age <- gmv_sub %>%
+  select(smri_vol_cdk_cuneuslh:smri_vol_scs_subcorticalgv, age) %>%
+  summarise_all(~ cor(., gmv_sub$age))
+
+# Print correlation values
+cor_age_arrange <- arrange(as.data.frame(t(correlation_with_age)))
+
+# Get names of negative and positive correlations
+cor_age_arrange_neg <- cor_age_arrange %>% filter(V1 < 0.0) %>% rownames()
+cor_age_arrange_pos <- cor_age_arrange %>% filter(V1 > 0.0) %>% rownames()
+
+# Flip negative values to positive for the sake of brain age calcs.
+gmv_sub_flip <- gmv_sub %>%
+  mutate_at(vars(cor_age_arrange_neg), funs(max(.) - .))
+
+smri_list <- colnames(gmv_sub_flip %>% select(contains("smri")))
+# Create a plot for each GMV
+for (smri in smri_list) {
+  p <- ggplot(gmv_sub_flip %>% filter(eventname == "baseline_year_1_arm_1"), 
+              aes_string(x="age", y=smri)) +
+    geom_point(aes(color = as.factor(sex))) +
+    geom_smooth(method = "lm", aes(color = as.factor(sex)), se = FALSE) +
+    labs(x="Age", y=smri, title=paste("Scatterplot of Age vs", smri)) +
+    scale_color_manual(values = c("blue", "red"))
+  print(p)
+}
+
+```
+
+
+# Cortical Thickness
+```{r}
+smri_list <- colnames(thk_sub %>% select(contains("smri")))
+
+# Create a plot for each Cortical Thickness ROI
+for (smri in smri_list) {
+  p <- ggplot(thk_sub, aes_string(x="age", y=smri)) +
+    geom_point(aes(color = as.factor(sex))) +
+    geom_smooth(method = "lm", aes(color = as.factor(sex)), se = FALSE) +
+    labs(x="Age", y=smri, title=paste("Scatterplot of Age vs", smri)) +
+    scale_color_manual(values = c("blue", "red"))
+  print(p)
+}
+```
+
+### Get correlations to see direction
+```{r}
+colnames(thk_sub)
+# Select the range of columns and chronological age column
+selected_cols <- c(paste0("smri_thick_cdk_banksstslh:smri_thick_cdk_mean"), "age")
+# Calculate correlation values
+correlation_with_age <- thk_sub %>%
+  select(smri_thick_cdk_banksstslh:smri_thick_cdk_mean, age) %>%
+  summarise_all(~ cor(., thk_sub$age))
+
+# Print correlation values
+cor_age_arrange <- arrange(as.data.frame(t(correlation_with_age)))
+
+# Get names of negative and positive correlations
+cor_age_arrange_neg <- cor_age_arrange %>% filter(V1 < 0.0) %>% rownames()
+cor_age_arrange_pos <- cor_age_arrange %>% filter(V1 > 0.0) %>% rownames()
+
+# Flip negative values to positive for the sake of brain age calcs.
+thk_sub_flip <- thk_sub %>%
+  mutate_at(vars(cor_age_arrange_neg), funs(max(.) - .))
+
+smri_list <- colnames(thk_sub_flip %>% select(contains("smri")))
+# Create a plot for each GMV
+for (smri in smri_list) {
+  p <- ggplot(thk_sub_flip, aes_string(x="age", y=smri)) +
+    geom_point(aes(color = as.factor(sex))) +
+    geom_smooth(method = "lm", aes(color = as.factor(sex)), se = FALSE) +
+    labs(x="Age", y=smri, title=paste("Scatterplot of Age vs", smri)) +
+    scale_color_manual(values = c("blue", "red"))
+  print(p)
+}
+
+```
+
+
+
+# Check Outlier Participants and Filter out for healthy only
+## GMV
+```{r}
+# I need to standardize first to see which participants need to be removed because they are
+# outliers.
+
+standardize <- function(df, start_string, end_string) {
+
+  ## Males
+  gmv_forScale_male <- df %>% filter(sex == 1)
+
+  gmv_forScale_male <- gmv_forScale_male %>%
+    mutate(across(starts_with(start_string):ends_with(end_string), scale))
+
+  ## Females
+  gmv_forScale_female <- df %>% filter(sex == 2)
+
+  gmv_forScale_female <- gmv_forScale_female %>%
+    mutate(across(starts_with(start_string):ends_with(end_string), scale))
+
+  return(rbind(gmv_forScale_male, gmv_forScale_female))
+}
+
+
+# standardize on healthy baseline participants
+gmv_sub_flip_stand_base_healthy <- standardize(gmv_sub_flip %>% 
+                                    filter(eventname == "baseline_year_1_arm_1") %>%
+                                    filter(phys_ment_health == 0), 
+                                  "smri_vol_cdk_cuneuslh", 
+                                  "smri_vol_scs_subcorticalgv")
+
+
+gmv_sub_flip_stand_base_healthy_outlierRem <- gmv_sub_flip_stand_base_healthy %>%
+  filter(phys_ment_health == 0) %>%
+  rowwise() %>%
+  mutate(outlier = any(abs(c_across(smri_vol_cdk_cuneuslh:smri_vol_scs_subcorticalgv)) > 2.5)) %>%
+  ungroup() %>%
+  filter(outlier == FALSE)
+
+
+# Semi_join original non-standardized df with outliers removed standardized df
+gmv_sub_flip_healthy_outlier_removed <- gmv_sub_flip %>% 
+  filter(phys_ment_health == 0) %>%
+  filter(eventname == "baseline_year_1_arm_1") %>%
+  semi_join(gmv_sub_flip_stand_base_healthy_outlierRem, by = c("src_subject_id", "eventname"))
+
+
+# Re-merge with unhealthy at baseline
+gmv_sub_unhealthy_base <- gmv_sub_flip %>% 
+  filter(phys_ment_health > 0) %>% 
+  filter(eventname == "baseline_year_1_arm_1")
+
+# All corrected baseline values
+gmv_sub_base <- rbind(gmv_sub_unhealthy_base, gmv_sub_flip_healthy_outlier_removed)
+
+# Merge with 2 and 4 year data
+gmv_all_corrected <- rbind(gmv_sub_base, 
+                           gmv_sub_flip %>% 
+                             filter(eventname != "baseline_year_1_arm_1"))
+
+```
+
+## Cortical Thickness
+```{r}
+# 
+# thk_sub_healthy <- thk_sub %>%
+#   filter(phys_ment_health == 0) %>%
+#   rowwise() %>%
+#   mutate(outlier = any(abs(c_across(smri_thick_cdk_cuneuslh:smri_thick_cdk_mean)) > 3.5)) %>%
+#   ungroup() %>%
+#   filter(outlier == FALSE)
+# 
+# # Re-merge
+# thk_sub_unhealthy <- thk_sub %>% filter(phys_ment_health > 0)
+# 
+# 
+# thk_sub_all <- rbind(thk_sub_unhealthy, thk_sub_healthy %>% select(-outlier))
+```
+
+# Backward Selection
+## GMV
+```{r, echo=T, results='hide'}
+# gmv_sub_healthy %>% select(-outlier)
+# 
+# # Perform backward selection
+# model <- lm(age ~ ., data = gmv_sub_healthy %>% 
+#               select(-outlier) %>% 
+#               select(smri_vol_cdk_cuneuslh:smri_vol_scs_subcorticalgv, age))  # Initial model with selected GMV ROIs
+# 
+# while (length(coef(model)) > 1) {
+#   pvals <- summary(model)$coefficients[, "Pr(>|t|)"][-1]
+#   max_pval <- max(pvals)
+#   
+#   if (max_pval > 0.05) {
+#     max_pval_index <- which(pvals == max_pval)
+#     variable_to_remove <- names(pvals)[max_pval_index]
+#     
+#     # Update the model by removing the variable with the highest p-value
+#     model <- update(model, paste(". ~ . - ", variable_to_remove))
+#   } else {
+#     break
+#   }
+# }
+# 
+# # Final selected GMV ROIs
+# selected_gmv_rois <- names(coef(model))[-1]
+# selected_gmv_rois
+
+gmv_sub_flip_healthy_base <- gmv_all_corrected %>% 
+  filter(phys_ment_health == 0) %>%
+  filter(eventname == "baseline_year_1_arm_1")
+
+
+# Backward Selection using step function with AIC
+# Perform backward selection
+model <- lm(age ~ ., data = gmv_sub_flip_healthy_base %>% 
+              select(smri_vol_cdk_cuneuslh:smri_vol_scs_subcorticalgv, age))  # Initial model with selected GMV ROIs
+
+# Perform backward stepwise selection using the 'step' function
+selected_model <- step(model, direction = "both")
+
+# Final selected GMV ROIs
+selected_gmv_rois <- names(coef(selected_model))[-1]
+selected_gmv_rois
+
+
+
+
+```
+
+## Cortical Thickness
+```{r}
+
+# Backward Selection using step function with AIC
+# Perform backward selection
+model <- lm(age ~ ., data = thk_sub_healthy %>% 
+              select(-outlier) %>% 
+              select(smri_thick_cdk_banksstslh:smri_thick_cdk_mean, age))  # Initial model with selected GMV ROIs
+
+# Perform backward stepwise selection using the 'step' function
+selected_model <- step(model, direction = "both")
+
+# Final selected GMV ROIs
+selected_thk_rois <- names(coef(selected_model))[-1]
+selected_thk_rois
+
+
+```
+
+## GMV and Cortical Thickness
+### Merge Dataframes
+```{r}
+
+gmv_thk_sub_healthy <- merge(gmv_sub_healthy %>% select(src_subject_id, eventname, 
+                                 smri_vol_cdk_cuneuslh:smri_vol_scs_subcorticalgv, age),
+      thk_sub_healthy %>% select(src_subject_id, eventname, 
+                                 smri_thick_cdk_banksstslh:smri_thick_cdk_mean, age), 
+      by = c("src_subject_id", "eventname"))
+
+gmv_thk_sub_healthy <- gmv_thk_sub_healthy %>%
+  mutate(age = coalesce(age.x, age.y)) %>%
+  select(-age.x, -age.y)
+
+gmv_thk_sub_all <- merge(gmv_sub_all, thk_sub_all, by = c("src_subject_id", "eventname"))
+
+
+# Base names of columns to merge
+columns_to_merge <- c("ment_health", "phys_health", "phys_ment_health", "demo_sex_v2", 
+                      "site_id_l", "rel_family_id", "interview_age", "sex", "age")
+
+# Function to merge .x and .y columns for a single column base name
+merge_columns <- function(df, colname) {
+  x_col <- paste0(colname, ".x")
+  y_col <- paste0(colname, ".y")
+  
+  df <- df %>%
+    mutate(!!colname := coalesce(!!sym(x_col), !!sym(y_col))) %>%
+    select(-!!sym(x_col), -!!sym(y_col))
+  
+  return(df)
+}
+
+# Apply the function for each column base name
+for (col in columns_to_merge) {
+  gmv_thk_sub_all <- merge_columns(gmv_thk_sub_all, col)
+}
+```
+
+
+### Run StepAIC
+```{r, echo=T, results='hide'}
+
+# Backward Selection using step function with AIC
+# Perform backward selection
+model <- lm(age ~ ., data = gmv_thk_sub_healthy %>% 
+              select(smri_thick_cdk_banksstslh:smri_thick_cdk_mean,
+                     smri_vol_cdk_cuneuslh:smri_vol_scs_subcorticalgv, age))  # Initial model with selected GMV ROIs
+
+# Perform backward stepwise selection using the 'step' function
+selected_model <- step(model, direction = "both")
+
+# Final selected GMV ROIs
+selected_gmv_thk_rois <- names(coef(selected_model))[-1]
+selected_gmv_thk_rois
+
+
+```
+
+
+# Take out redundant areas and areas not selected by StepAIC
+## GMV
+```{r}
+gmv_take_out <- setdiff(
+  names(gmv_sub_all %>% 
+          select(smri_vol_cdk_cuneuslh:smri_vol_scs_subcorticalgv)),
+  selected_gmv_rois
+)
+
+gmv_sub_corrected_stepaic <- gmv_all_corrected %>% 
+  select(-any_of(gmv_take_out))
+
+
+```
+
+## Cortical Thickness
+```{r}
+
+# GMV columns to take out from backward selection
+thk_take_out <- setdiff(names(thk_sub_all %>% 
+                                select(smri_thick_cdk_banksstslh:smri_thick_cdk_mean)), 
+                        selected_thk_rois)
+
+thk_take_out
+
+thk_sub_base <- thk_sub_all %>% select(-c(thk_take_out, smri_thick_cdk_meanlh, smri_thick_cdk_meanrh, 
+                                      smri_thick_cdk_mean, smri_thick_cdk_suplrh, smri_thick_cdk_supllh))
+
+```
+
+## Both
+```{r}
+
+
+# GMV columns to take out from backward selection
+gmv_thk_take_out <- setdiff(names(gmv_thk_sub_all %>% 
+                                select(smri_thick_cdk_banksstslh:smri_thick_cdk_mean,
+                                       smri_vol_cdk_cuneuslh:smri_vol_scs_subcorticalgv)), 
+                        selected_gmv_thk_rois)
+
+gmv_thk_take_out
+
+gmv_thk_sub_base <- gmv_thk_sub_all %>% select(-c(gmv_thk_take_out, smri_thick_cdk_meanlh, 
+                                                  smri_thick_cdk_meanrh, smri_thick_cdk_mean, 
+                                                  smri_thick_cdk_suplrh, smri_thick_cdk_supllh,
+                                                  smri_vol_cdk_totallh, smri_vol_scs_subcorticalgv))
+
+```
+
+
+# Check Distribution again
+## GMV Healthy
+```{r}
+smri_list <- colnames(gmv_sub_corrected_stepaic %>% select(contains("smri")))
+
+for (smri in smri_list) {
+  hist_data <- gmv_sub_corrected_stepaic %>%
+    filter(phys_ment_health ==  1) %>%
+    pull(smri) %>%
+    as.numeric()
+
+  hist(hist_data, main = paste("Histogram of", smri))
+}
+
+```
+
+# Export 5.1 Outlier Removed, StepAIC selected GMVs, all time points
+```{r}
+gmv_sub_corrected_stepaic
+gmv_sub_corrected_stepaic %>% filter(eventname == "baseline_year_1_arm_1") %>% 
+  filter(phys_health_bin == 0) 
+write.csv(gmv_sub_corrected_stepaic, paste0(root, "Version5.0_Exported_Data/gmv_sub_corrected_stepaic.csv"))
+```
+
+
+
+## Cortical Thickness
+```{r}
+smri_list <- colnames(thk_sub_base %>% select(contains("smri")))
+
+for (smri in smri_list) {
+  hist(thk_sub_base %>% filter(phys_ment_health == 0) %>% select(smri) %>% unlist() %>% as.numeric())
+}
+
+```
+
+# Check ROIs with large variances
+
+
+# Match 2 year and 4 year dataframes with Baseline
+## GMV
+```{r}
+gmv_sub_2year <- gmv_2year %>% select(all_of(colnames(gmv_sub_base)))
+gmv_sub_4year <- gmv_4year %>% select(all_of(colnames(gmv_sub_base)))
+```
+
+## Cortical Thickness
+```{r}
+thk_sub_2year <- thk_2year %>% select(all_of(colnames(thk_sub_base)))
+thk_sub_4year <- thk_4year %>% select(all_of(colnames(thk_sub_base)))
+```
+
+## Both
+```{r}
+gmv_thk_2year <- merge(gmv_2year, thk_2year, by = c("src_subject_id", "eventname"))
+gmv_thk_4year <- merge(gmv_4year, thk_4year, by = c("src_subject_id", "eventname"))
+
+# Base names of columns to merge
+columns_to_merge <- c("ment_health", "phys_health", "phys_ment_health", "demo_sex_v2", 
+                      "site_id_l", "rel_family_id", "interview_age", "sex", "age", 
+                      "mri_info_manufacturer")
+
+# Function to merge .x and .y columns for a single column base name
+merge_columns <- function(df, colname) {
+  x_col <- paste0(colname, ".x")
+  y_col <- paste0(colname, ".y")
+  
+  if (all(c(x_col, y_col) %in% colnames(df))) {
+    df <- df %>%
+      mutate(!!colname := coalesce(!!sym(x_col), !!sym(y_col))) %>%
+      select(-!!sym(x_col), -!!sym(y_col))
+  }
+  
+  return(df)
+}
+
+# Apply the function for each column base name
+for (col in columns_to_merge) { 
+  gmv_thk_sub_base <- merge_columns(gmv_thk_sub_base, col)
+  gmv_thk_2year <- merge_columns(gmv_thk_2year, col)
+  gmv_thk_4year <- merge_columns(gmv_thk_4year, col)
+}
+
+gmv_thk_sub_2year <- gmv_thk_2year %>% select(all_of(colnames(gmv_thk_sub_base)))
+gmv_thk_sub_4year <- gmv_thk_4year %>% select(all_of(colnames(gmv_thk_sub_base)))
+
+```
+
+
+# Merge GMV and Cortical Thickness
+```{r}
+
+write.csv(gmv_thk_sub_base, paste0(root, "Version5.0_Exported_Data/gmv_thk_sub_base.csv"))
+write.csv(gmv_thk_sub_2year, paste0(root, "Version5.0_Exported_Data/gmv_thk_sub_2year.csv"))
+write.csv(gmv_thk_sub_4year, paste0(root, "Version5.0_Exported_Data/gmv_thk_sub_4year.csv"))
+```
+
+# Participants with all three timepoints
+```{r}
+gmv_sub_3timepoints <- rbind(gmv_sub_base, rbind(gmv_sub_2year, gmv_sub_4year)) %>%
+  group_by(src_subject_id) %>%
+  filter(n_distinct(eventname) == 3) %>%
+  ungroup()
+
+write.csv(gmv_sub_3timepoints, paste0(root, "Version5.0_Exported_Data/gmv_sub_3timepoints.csv"))
+```
+
+
+
+# Export
+```{r}
+gmv_sub_base %>% filter(eventname == "baseline_year_1_arm_1") %>% filter(phys_health_bin == 0)
+write.csv(gmv_sub_base, paste0(root, "Version5.0_Exported_Data/gmv_sub_base.csv"))
+write.csv(gmv_sub_2year, paste0(root, "Version5.0_Exported_Data/gmv_sub_2year.csv"))
+write.csv(gmv_sub_4year, paste0(root, "Version5.0_Exported_Data/gmv_sub_4year.csv"))
+
+
+write.csv(thk_sub_base, paste0(root, "Version5.0_Exported_Data/thk_sub_base.csv"))
+write.csv(thk_sub_2year, paste0(root, "Version5.0_Exported_Data/thk_sub_2year.csv"))
+write.csv(thk_sub_4year, paste0(root, "Version5.0_Exported_Data/thk_sub_4year.csv"))
+
+
+```
+
+
+
+
+
+
+

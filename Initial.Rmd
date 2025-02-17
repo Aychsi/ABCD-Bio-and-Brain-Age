@@ -1,0 +1,809 @@
+---
+title: "HC_ABCD_V1"
+output:
+  html_document:
+    toc: true
+    theme: united
+date: '2022-09-20'
+---
+
+Look at clinical markers overtime to predict chronological age using ridge regression. This will be 
+called the biological age. Then, I will compute the difference between biological age and actual
+chronological age. Is this biological age gap a predictor of substance use, alcohol use, or smoking? 
+
+Potential Markers chosen from common biomarkers in literature:
+
+abcd_ybd01 
+This instrument summarizes whole blood analysis from two tubes for hemoglobin, A1C, CBC, total cholesterol, HDL cholesterol, and Ferritin.
+From this, I want to use A1C (Glycated Hemoglobin), CBC, HDL cholesterol, possibly - lymphocytes
+
+Ferritin justification
+https://www.sciencedirect.com/science/article/pii/S2212267218304866?casa_token=df8tuwoOl1oAAAAA:7JHZqMqBCm73EaNXx6GxC5cs68USvmmW8xuUnsS_vU96b4eA1jr8_Q1_johhJCHONfSOh6Dv_Q
+
+lymphocytes justification
+https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5191888/
+
+abcd_hsss01
+Pubertal hormone levels (estradiol, testosterone, and DHEA). 
+DHEA effects unclear in literature
+
+Pubertal changes - Potential biomarker?
+
+Pace of Age:
+B ~ b0 + b1(Age) + (1|abcd_site) + (1|abcd_site:rel_family_id) + (1|abcd_site:rel_family_id:SubjID)
+B is the biomarker
+
+
+C Age ~ b0 + b1(Biomarker1) ... +  (1  + slopes | abcd_site) + (1 + slopes | abcd_site:rel_family_id) 
+For each individual:
+Use betas to predict BA for each individual
+Use BA to find correlations with drug use at baseline
+Use BA to find likelihood of alcohol abuse at second timepoint.
+
+lme4 there is predict function.
+Check whether BA is correlated with CA
+Correct for bias
+Check how many site ideas and family ids. Create a table to visualize the nesting structure
+When I run the log reg, use mixed effect, glmer. If not, take a random subject for each family 
+
+TODO
+1. Organize data by merging site df and family df. Then merge biomarkers by subjid
+2. Standardize variables
+3. regress on age to get betas for each biomarker
+4. Predict BA using betas
+5. Correlations and predictions with drug use. Same time point is correlation or regression to control for co-variates. For future time points
+use regression. Alcohol is a yes/no outcome, so then use logistic regression. Control for alcohol abuse. Interaction between BA and gender or race
+at two years
+
+```{r}
+### Libraries
+# install.packages("dplyr")
+# install.packages("lmerTest")
+#install.packages("ggthemes")
+# install.packages("flexplot")
+# devtools::install_github("dustinfife/flexplot")
+library(flexplot)
+library(magrittr)
+library(knitr)
+library(dplyr)
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+library(ggthemes)
+library(dplyr)
+library(skimr)
+```
+
+# Family and Site ID data 
+## 
+```{r}
+### Import data and set directory
+setwd("/Users/hansoochang/Drexel/ABCD")
+# FamilyId <- read.csv("/Users/hansoochang/Drexel/ABCD/data/acspsw03.csv")
+# SiteId <- read.csv("/Users/hansoochang/Drexel/ABCD/data/abcd_lt01.csv")
+demographic <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.1/core/abcd-general/abcd_y_lt.csv")
+sex <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.1/core/gender-identity-sexual-health/gish_y_gi.csv")
+
+demographic <- merge(demographic,
+                            sex %>% select(src_subject_id, eventname, kbi_sex_assigned_at_birth),
+                            by = c("src_subject_id", "eventname"))
+
+# Specify the columns you want to fill NAs in
+columns_to_fill <- c("rel_family_id", "rel_birth_id", "kbi_sex_assigned_at_birth")
+
+demographic_filled <- demographic %>%
+  group_by(src_subject_id) %>%
+  mutate(across(all_of(columns_to_fill), ~ifelse(is.na(.), first(na.omit(.)), .))) %>%
+  ungroup() %>%
+  rename(sex = kbi_sex_assigned_at_birth) %>% # Rename the column
+  mutate(sex = recode(sex, `1` = "M", `2` = "F")) # Recode values
+
+
+```
+
+# Blood Biomarkers 
+## Version 4.0 (2-Year)
+```{r}
+### Blood ###
+wba <- read.csv("/Users/hansoochang/Drexel/ABCD/data/abcd_ybd01.csv")
+table(wba$eventname)
+
+# 979 participants with Hemoglobin A1C data. 
+# wba[which(wba$biospec_blood_hemoglobin_a1 != ""),] 
+
+# 716 participants with white blood count data.
+# wba[which(wba$biospec_blood_wbc_count != ""),] 
+
+# 1022 participants with Total Cholesterol data.
+# wba[which(wba$biospec_blood_cholesterol != ""),] 
+
+# 1022 participants with HDL Cholesterol data.
+# wba[which(wba$biospec_blood_hdl_cholesterol != ""),] 
+
+# 1023 participants with Ferritin data.
+# wba[which(wba$biospec_blood_ferritin != ""),] 
+
+# Remove first row because duplicate
+wba1 <- wba[-1,]
+row.names(wba1) <- NULL
+colnames(wba1)
+# Filter dataframe to have only biomarkers above
+blood <- wba1[, c("interview_age","collection_id", "abcd_ybd01_id", "subjectkey", "src_subject_id",
+                  "eventname", "biospec_blood_hemoglobin_a1", "biospec_blood_wbc_count",
+                  "biospec_blood_cholesterol", "biospec_blood_hdl_cholesterol", 
+                  "biospec_blood_ferritin" , "biospec_blood_baso_percent", "biospec_blood_baso_abs",
+                  "biospec_blood_eos_percent", "biospec_blood_eos_abs", "biospec_blood_hemoglobin",
+                  "biospec_blood_mcv", "biospec_blood_plt_count", "biospec_blood_imm_gran_per",
+                  "biospec_blood_imm_gran_abs", "biospec_blood_lymph_percent", 
+                  "biospec_blood_lymph_abs", "biospec_blood_mono_percent", "biospec_blood_mono_abs",
+                  "biospec_blood_mpv", "biospec_blood_neut_percent", "biospec_blood_neut_abs",
+                  "biospec_blood_rdw", "biospec_blood_rbc_count")]
+# Took out neut_abs, hemotocrit because correlation of greater than 0.7
+
+# Turn all no-value cells into NA
+blood <- blood %>% mutate_all(na_if,"")
+
+# Select rows with no NA's. A total of 687 participants 
+blood_biomarkers <- blood[complete.cases(blood), ]
+
+length(unique(wba[,"subjectkey"]))
+
+```
+
+## Version 5.0 (Up to 4 year)
+```{r}
+wba_5 <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.0/core/physical-health/ph_y_bld.csv", fill = NA)
+table(wba_5$eventname)
+
+bm <- c("biospec_blood_hemoglobin_a1", "biospec_blood_wbc_count", "biospec_blood_cholesterol",
+        "biospec_blood_hdl_cholesterol", "biospec_blood_ferritin", "MAP", "BMI", "anthro_waist_cm",
+         "biospec_blood_baso_abs",
+                   "biospec_blood_eos_abs", "biospec_blood_hemoglobin",
+                  "biospec_blood_mcv", "biospec_blood_plt_count",
+                  "biospec_blood_imm_gran_abs",  
+                  "biospec_blood_lymph_abs", "biospec_blood_mono_abs",
+                  "biospec_blood_mpv",  "biospec_blood_neut_abs", 
+                  "biospec_blood_rdw", "biospec_blood_rbc_count", "biospec_blood_hematocrit", "NLR",
+        "LMR", "PLR")
+
+wba_5_bms <- wba_5[, c("src_subject_id",
+                  "eventname", "biospec_blood_hemoglobin_a1", "biospec_blood_wbc_count",
+                  "biospec_blood_cholesterol", "biospec_blood_hdl_cholesterol", 
+                  "biospec_blood_ferritin" , "biospec_blood_baso_percent", "biospec_blood_baso_abs",
+                  "biospec_blood_eos_percent", "biospec_blood_eos_abs", "biospec_blood_hemoglobin",
+                  "biospec_blood_mcv", "biospec_blood_plt_count", "biospec_blood_imm_gran_per",
+                  "biospec_blood_imm_gran_abs", "biospec_blood_lymph_percent", 
+                  "biospec_blood_lymph_abs", "biospec_blood_mono_percent", "biospec_blood_mono_abs",
+                  "biospec_blood_mpv", "biospec_blood_neut_percent", "biospec_blood_neut_abs",
+                  "biospec_blood_rdw", "biospec_blood_rbc_count")]
+
+  
+wba_5_bms[complete.cases(wba_5_bms$biospec_blood_rdw), ] %>% filter(eventname == "4_year_follow_up_y_arm_1")
+
+hist(scale(wba_5_bms$biospec_blood_imm_gran_abs))
+hist(scale(wba_5_bms$biospec_blood_imm_gran_per))
+
+hist((wba_5_bms$biospec_blood_rdw))
+```
+Least amount of data available for given biomarker: 236 participants with information across at year 4.
+
+
+# Blood Pressure.
+According to Belsky (2015), Mean Arterial Pressure (MAP) was used to calculate blood pressure. 
+Diastolic	Pressure+1/3(Systolic	Pressure - Diastolic	Pressure). The mean value for the three 
+BP readings are used in this dataset
+
+## Version 4.0
+```{r}
+### Blood Pressure ###
+bp <- read.csv("/Users/hansoochang/Drexel/ABCD/data/abcd_bp01.csv")
+table(bp$study_cohort_name)
+# Drop first row because duplicate
+bp <- bp[-1,]
+row.names(bp) <- NULL
+
+# Turn all no-value cells into NA
+bp <- bp %>% mutate_all(na_if,"")
+
+# Only rows with mean diastolic and mean systolic
+bp1 <- bp[!is.na(bp$blood_pressure_dia_mean) | !is.na(bp$blood_pressure_sys_mean), ]
+
+# Change datatype to numeric. Originally chr
+bp1$blood_pressure_sys_mean <- as.numeric(as.character(bp1$blood_pressure_sys_mean))
+bp1$blood_pressure_dia_mean <- as.numeric(as.character(bp1$blood_pressure_dia_mean))
+
+bp1$MAP <- bp1$blood_pressure_dia_mean + (1/3)*(bp1$blood_pressure_sys_mean - 
+                                               bp1$blood_pressure_dia_mean)
+
+# Final blood pressure dataframe
+bp_biomarker <- bp1[, c("subjectkey", "MAP")]
+table(bp1$eventname)
+```
+
+## Version 5.0
+```{r}
+bp_5 <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.0/core/physical-health/ph_y_bp.csv", fill = NA)
+
+table(bp_5$eventname)
+
+bp_5 %>% 
+  group_by(eventname) %>%
+  skim()
+
+# Only rows with mean diastolic and mean systolic
+bp_51 <- bp_5[!is.na(bp_5$blood_pressure_dia_mean) | !is.na(bp_5$blood_pressure_sys_mean), ]
+
+# Change datatype to numeric. Originally chr
+bp_51$blood_pressure_sys_mean <- as.numeric(as.character(bp_51$blood_pressure_sys_mean))
+bp_51$blood_pressure_dia_mean <- as.numeric(as.character(bp_51$blood_pressure_dia_mean))
+
+bp_51$MAP <- bp_51$blood_pressure_dia_mean + (1/3)*(bp_51$blood_pressure_sys_mean - 
+                                               bp_51$blood_pressure_dia_mean)
+
+
+# Final blood pressure dataframe
+bp_5_biomarker <- bp_51[, c("src_subject_id", "eventname", "MAP")]
+```
+
+
+# BMI and waist
+https://downloads.hindawi.com/journals/bmri/2022/2146596.pdf
+
+## Version 4.0
+```{r}
+hww <- read.csv("/Users/hansoochang/Drexel/ABCD/data/abcd_ant01.csv")
+
+# Drop first row because duplicate. However, this removes the values of the average weight column
+# because there is function that calculates the average weight in that first row.
+hww <- hww[-1,]
+row.names(hww) <- NULL
+
+# Turn all no-value cells into NA
+hww <- hww %>% mutate_all(na_if,"")
+
+# Select only 2 year cohort
+hww1 <- hww[which(hww$eventname == "2_year_follow_up_y_arm_1"), ]
+
+# Change datatype to numeric. Originally chr
+hww1$anthroweight1lb <- as.numeric(hww1$anthroweight1lb) 
+hww1$anthroweight2lb <- as.numeric(hww1$anthroweight2lb) 
+hww1$anthroweight3lb <- as.numeric(hww1$anthroweight3lb) 
+
+# re-calculate means of weight
+hww1$anthroweightcalc <- rowMeans(hww1[, c("anthroweight1lb", "anthroweight2lb", "anthroweight3lb")],
+                                 na.rm=TRUE)
+
+# Convert to kg
+hww1$anthroweightcalc_kg <- hww1$anthroweightcalc*0.453592
+
+# Change height datatype to numeric
+hww1$anthroheightcalc <- as.numeric(hww1$anthroheightcalc) 
+
+# Convert average height to meters
+hww1$anthroheightcalc_m <- hww1$anthroheightcalc*0.0254
+
+# Calculate BMI ratio. BMI = kg/(m^2)
+hww1$BMI <- hww1$anthroweightcalc_kg/(hww1$anthroheightcalc_m^2)
+
+# Final anthropomorphic dataframe
+hww_biomarker <- hww1[, c("subjectkey", "BMI")]
+
+# Use only complete rows
+hww_biomarker <- hww_biomarker[complete.cases(hww_biomarker), ]
+
+# 7.520 participants at 2-year mark.
+head(hww_biomarker)
+
+### For Ana ###
+# hww_biomarker$src_subject_id <- hww_biomarker$subjectkey
+# bmi_sex <- merge(hww_biomarker %>% select(src_subject_id, BMI), 
+#       demographic_filled %>% 
+#         select(src_subject_id, sex), 
+#       by = c("src_subject_id"))
+# 
+# demographic_filled %>% filter(src_subject_id == "NDAR_INV107UCJ69")
+# 
+# bmi_sex <- bmi_sex %>%
+#   group_by(src_subject_id) %>%
+#   slice_max(order_by = BMI, with_ties = FALSE) %>%
+#   ungroup()
+# 
+# bmi_sex_filtered <- bmi_sex %>% filter(!is.na(sex)) %>%
+#   group_by(sex) %>%
+#   filter(BMI > mean(BMI) - 4 * sd(BMI) & BMI < mean(BMI) + 4 * sd(BMI)) %>%
+#   ungroup()
+# 
+# hist(bmi_sex_filtered$BMI)
+# 
+# write.csv(bmi_sex_filtered, "/Users/hansoochang/Drexel/ABCD/Version5.0_Exported_Data/bmi_sex_filtered.csv")
+
+```
+
+## Version 5.0
+```{r}
+hww_5 <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.0/core/physical-health/ph_y_anthro.csv")
+
+
+# Change datatype to numeric. Originally chr
+hww_5$anthroweight1lb <- as.numeric(hww_5$anthroweight1lb) 
+hww_5$anthroweight2lb <- as.numeric(hww_5$anthroweight2lb) 
+hww_5$anthroweight3lb <- as.numeric(hww_5$anthroweight3lb) 
+
+# re-calculate means of weight
+hww_5$anthroweightcalc <- rowMeans(hww_5[, c("anthroweight1lb", "anthroweight2lb", "anthroweight3lb")],
+                                 na.rm=TRUE)
+
+# Convert to kg
+hww_5$anthroweightcalc_kg <- hww_5$anthroweightcalc*0.453592
+
+# Change height datatype to numeric
+hww_5$anthroheightcalc <- as.numeric(hww_5$anthroheightcalc) 
+
+# Convert average height to meters
+hww_5$anthroheightcalc_m <- hww_5$anthroheightcalc*0.0254
+
+# Calculate BMI ratio. BMI = kg/(m^2)
+hww_5$BMI <- hww_5$anthroweightcalc_kg/(hww_5$anthroheightcalc_m^2)
+
+# Final anthropomorphic dataframe
+hww_5_biomarker <- hww_5[, c("src_subject_id", "eventname","BMI")]
+
+# 7.520 participants at 2-year mark.
+head(hww_5_biomarker)
+
+```
+
+
+
+Physical Activity
+https://downloads.hindawi.com/journals/bmri/2022/2146596.pdf
+Average METs. MET minutes were used to index total physical activity. A MET is a metabolic
+equivalent, the amount of energy expended at rest. Casual walking
+produces about three METs, triple the energy expenditure
+compared to sitting. If a person engaged in casual walking
+for 30 minutes, then, MET minutes would be 90 (3 METs
+× 30 minutes)
+
+1 MET=Resting Metabolism of average individual (adult)= 3.5 ml/kg/min of O2 consumption
+```{r}
+pa <- read.csv("/Users/hansoochang/Drexel/ABCD/data/abcd_fbdpas01.csv")
+
+# Drop first row because duplicate
+pa <- pa[-1,]
+row.names(pa) <- NULL
+
+# Turn all no-value cells into NA
+pa <- pa %>% mutate_all(na_if,"")
+
+# only at 2 year follow up
+pa1 <- pa[which(pa$eventname == "2_year_follow_up_y_arm_1"),]
+
+# Convert to numeric
+pa1$fit_ss_dayt_ave_met_value <- as.numeric(pa1$fit_ss_dayt_ave_met_value) 
+
+# group by participant and get the average of the weekly MET averages.  
+pa1_group <- pa1 %>% group_by(subjectkey) %>% summarise(MET_average = 
+                                                         mean(fit_ss_dayt_ave_met_value))
+
+# No NaN's
+pa_biomarker <- pa1_group[complete.cases(pa1_group), ]
+
+# 7,394 participants
+pa_biomarker
+```
+I think I don't need this one above...
+
+# Merging
+## Version 4.0
+```{r}
+# ### Merge ###
+# a <- merge(ID, blood_biomarkers, by = "subjectkey")
+# b <- merge(a, bp_biomarker, by = "subjectkey")
+# c <- merge(b, hww_biomarker, by = "subjectkey")
+# 
+# 
+# # drop some unnecessary columns
+# all_merge_drop <- c[, !colnames(c) %in% c("collection_id.x", "acspsw03_id",
+#                                                           "dataset_id", "src_subject_id.x", 
+#                                                           "eventname.x", "collection_id.y",
+#                                                           "src_subject_id.y", "abcd_ybd01_id",
+#                                                           "interview_age.x")]
+# 
+# # 658 total subjects
+# final_merge <- all_merge_drop[complete.cases(all_merge_drop), ]
+# nrow(final_merge)
+
+```
+
+## Version 5.0
+```{r}
+### Merge ###
+a <- merge(demographic_filled %>% select(src_subject_id:rel_family_id, sex, interview_age), 
+           wba_5_bms, by = c("src_subject_id", "eventname"))
+b <- merge(a, bp_5_biomarker, by = c("src_subject_id", "eventname"))
+table(b$eventname)
+c <- merge(b, hww_5_biomarker, by = c("src_subject_id", "eventname"))
+table(c$eventname)
+
+c %>%
+  group_by(src_subject_id) %>%  # Group data by participant ID
+  filter(n_distinct(eventname) >= 2) %>%  # Keep only groups with at least 2 unique eventnames
+  ungroup()  # Remove the grouping
+
+final_merge <- c
+```
+
+## Participant numbers
+```{r}
+# complete cases
+table(final_merge$eventname)
+
+final_merge %>%
+  group_by(src_subject_id) %>%
+  summarize(num_years = n_distinct(eventname))%>%
+  filter(num_years == 2) 
+
+```
+No one has all three years. The measures were only taken at 2 year and 4 year. Not sure where 3 year came from.
+
+
+
+# Standardization
+Standardization should be separate for men and women. HDL cholesterol declines with age, so this 
+should be reversed. Previous literature has shown that physical activity also declines with age,
+but this may not be true for children and teenagers.
+```{r}
+# ### Standardize ###
+# 
+# final_merge[,8:ncol(final_merge)] <- sapply(final_merge[,8:ncol(final_merge)], as.numeric)
+# 
+# # Make Ratio BMs
+# # Neutrophil to Lymphocyte Ratio (NLR)
+# # Lymphocyte to monocyte ratio (LMR)
+# # Platelet to Lymphocyte Ratio (PLR)
+# final_merge$NLR <- final_merge$biospec_blood_neut_abs / final_merge$biospec_blood_lymph_abs
+# final_merge$LMR <- final_merge$biospec_blood_lymph_abs / final_merge$biospec_blood_mono_abs
+# final_merge$PLR <- final_merge$biospec_blood_plt_count / final_merge$biospec_blood_lymph_abs
+# 
+# # List of Biomarkers
+# bm <- c("biospec_blood_hemoglobin_a1", "biospec_blood_wbc_count", "biospec_blood_cholesterol",
+#         "biospec_blood_hdl_cholesterol", "biospec_blood_ferritin", "MAP", "BMI",
+#         "biospec_blood_baso_percent", "biospec_blood_baso_abs",
+#                   "biospec_blood_eos_percent", "biospec_blood_eos_abs", "biospec_blood_hemoglobin",
+#                   "biospec_blood_mcv", "biospec_blood_plt_count", "biospec_blood_imm_gran_per",
+#                   "biospec_blood_imm_gran_abs", "biospec_blood_lymph_percent", 
+#                   "biospec_blood_lymph_abs", "biospec_blood_mono_percent", "biospec_blood_mono_abs",
+#                   "biospec_blood_mpv", "biospec_blood_neut_percent", "biospec_blood_neut_abs",
+#                   "biospec_blood_rdw", "biospec_blood_rbc_count", "NLR",
+#         "LMR", "PLR")
+# 
+# # Convert biomarkers to numeric
+# 
+# final_merge[bm] <- sapply(final_merge[bm], as.numeric)
+# 
+# 
+# # Reverse BMs which are negatively associated with higher BA
+# # High NLR, high PLR, low LMR at baseline are significantly associated with
+# # poor overall survival - Chan, 2017
+# final_merge[, "biospec_blood_hdl_cholesterol"] <- -1*(final_merge[, "biospec_blood_hdl_cholesterol"])
+# final_merge[, "LMR"] <- -1*(final_merge[, "LMR"])
+# 
+# View(final_merge)
+# 
+# write.csv(final_merge, "/Users/hansoochang/Drexel/ABCD/data/bm_unstand.csv")
+# 
+# skim(final_merge[, c("NLR", "LMR", "PLR")])
+```
+
+
+```{r}
+# ## Men (361) ##
+# men_merge <- final_merge[which(final_merge$sex == "M"),]
+# nrow(men_merge)
+# 
+# # scale biomarkers
+# men_merge[, bm] <- as.data.frame(scale(men_merge[,bm]))
+# 
+# 
+# ## Women (296) ##
+# women_merge <- final_merge[which(final_merge$sex == "F"),]
+# nrow(women_merge)
+# 
+# # scale biomarkers
+# women_merge[, bm] <- as.data.frame(scale(women_merge[,bm]))
+# 
+# 
+# ## Remerge men and women ##
+# stand <- rbind(men_merge, women_merge)
+# 
+# head(stand)
+# 
+# write.csv(stand, "/Users/hansoochang/Drexel/ABCD/data/biomarkers.csv")
+```
+
+
+# Standardization 5.0
+I shouldn't standardize... it skews later timepoints.
+```{r}
+### Standardize ###
+final_merge <- final_merge %>% mutate_at(vars(biospec_blood_hemoglobin_a1:BMI), as.numeric)
+# Make Ratio BMs
+# Neutrophil to Lymphocyte Ratio (NLR)
+# Lymphocyte to monocyte ratio (LMR)
+# Platelet to Lymphocyte Ratio (PLR)
+final_merge$NLR <- final_merge$biospec_blood_neut_abs / final_merge$biospec_blood_lymph_abs
+final_merge$LMR <- final_merge$biospec_blood_lymph_abs / final_merge$biospec_blood_mono_abs
+final_merge$PLR <- final_merge$biospec_blood_plt_count / final_merge$biospec_blood_lymph_abs
+
+# List of Biomarkers
+bm <- c("biospec_blood_hemoglobin_a1", "biospec_blood_wbc_count", "biospec_blood_cholesterol",
+        "biospec_blood_hdl_cholesterol", "biospec_blood_ferritin", "MAP", "BMI",
+        "biospec_blood_baso_percent", "biospec_blood_baso_abs",
+                  "biospec_blood_eos_percent", "biospec_blood_eos_abs", "biospec_blood_hemoglobin",
+                  "biospec_blood_mcv", "biospec_blood_plt_count", "biospec_blood_imm_gran_per",
+                  "biospec_blood_imm_gran_abs", "biospec_blood_lymph_percent", 
+                  "biospec_blood_lymph_abs", "biospec_blood_mono_percent", "biospec_blood_mono_abs",
+                  "biospec_blood_mpv", "biospec_blood_neut_percent", "biospec_blood_neut_abs",
+                  "biospec_blood_rdw", "biospec_blood_rbc_count", "NLR",
+        "LMR", "PLR")
+
+# Convert biomarkers to numeric
+final_merge_num <- final_merge %>% mutate_at(vars(biospec_blood_hemoglobin_a1:PLR), as.numeric)
+```
+
+```{r}
+# Reverse BMs which are negatively associated with higher BA
+# High NLR, high PLR, low LMR at baseline are significantly associated with
+# poor overall survival - Chan, 2017
+# final_merge_num[, "biospec_blood_hdl_cholesterol"] <- -1*(final_merge_num[, "biospec_blood_hdl_cholesterol"])
+# final_merge_num[, "LMR"] <- -1*(final_merge_num[, "LMR"])
+# final_merge_num
+# ## Men (655) ##
+# men_merge <- final_merge_num[which(final_merge$sex == "M"),]
+# nrow(men_merge)
+# 
+# # scale biomarkers
+# men_merge[, bm] <- as.data.frame(scale(men_merge[,bm]))
+# 
+# ## Women (526) ##
+# women_merge <- final_merge[which(final_merge$sex == "F"),]
+# nrow(women_merge)
+# 
+# # scale biomarkers
+# women_merge[, bm] <- as.data.frame(scale(women_merge[,bm]))
+# 
+# 
+# ## Remerge men and women ##
+# stand_5 <- rbind(men_merge, women_merge)
+
+# Just write the final_merge_num as the final biomarkers_5 csv file
+write.csv(final_merge_num, "/Users/hansoochang/Drexel/ABCD/Version5.0_Exported_Data/biomarkers_5.csv")
+
+
+### For Ana ###
+```
+
+
+Modelling
+
+Determining Random Effects Structures
+```{r}
+length(unique(stand$subjectkey)) # 659
+length(unique(stand$rel_family_id))# 599
+length(unique(stand$site_id_l)) # 21
+```
+
+```{r}
+library(corrplot)
+
+corr <- cor(stand[bm])
+corrtab <- as.data.frame(as.table(corr))
+corrtab[order(corrtab$Freq), ]
+
+
+```
+We can see here that there is some multicollinearity issues, which is not a surprise. Let's take out
+BM's with percentages since these are redundant.
+
+```{r}
+bm <- c("biospec_blood_hemoglobin_a1", "biospec_blood_wbc_count", "biospec_blood_cholesterol",
+        "biospec_blood_hdl_cholesterol", "biospec_blood_ferritin", "MAP", "BMI", "anthro_waist_cm",
+         "biospec_blood_baso_abs",
+                   "biospec_blood_eos_abs", "biospec_blood_hemoglobin",
+                  "biospec_blood_mcv", "biospec_blood_plt_count",
+                  "biospec_blood_imm_gran_abs",  
+                  "biospec_blood_lymph_abs", "biospec_blood_mono_abs",
+                  "biospec_blood_mpv",  "biospec_blood_neut_abs", 
+                  "biospec_blood_rdw", "biospec_blood_rbc_count", "biospec_blood_hematocrit", "NLR",
+        "LMR", "PLR")
+
+
+corr <- cor(stand[bm])
+corrtab <- as.data.frame(as.table(corr))
+corrtab[order(corrtab$Freq), ]
+
+```
+All correlations are below 0.7 now.
+
+
+
+It's better not to use family ID as a random effect structure because it seems like there aren't 
+that many siblings. 
+
+Maybe gender could also be a random effects structure?
+
+C Age ~ b0 + b1(Biomarker1) ... +  (1  + slopes | abcd_site)
+For each individual:
+Use betas to predict BA for each individual
+Use BA to find correlations with drug use at baseline
+Use BA to find likelihood of alcohol abuse at second timepoint.
+```{r}
+library("modelsummary")
+
+attach(stand)
+
+### No random effects
+base <- lm(as.numeric(interview_age.y) ~ biospec_blood_hemoglobin_a1 + biospec_blood_wbc_count + 
+               biospec_blood_cholesterol + biospec_blood_hdl_cholesterol + biospec_blood_ferritin +
+               MAP + BMI + biospec_blood_baso_abs+
+                  biospec_blood_eos_abs+ biospec_blood_hemoglobin+
+                   biospec_blood_mcv+ biospec_blood_plt_count+
+                   biospec_blood_imm_gran_abs+ 
+                  biospec_blood_lymph_abs + biospec_blood_mono_abs+
+                   biospec_blood_mpv+ 
+                   biospec_blood_rdw+ biospec_blood_rbc_count+  NLR+
+         LMR+ PLR, data = stand)
+
+### Random slopes included for site_id and family_id Maximal
+### DOES NOT CONVERGE
+mod1 <- lmer(as.numeric(interview_age.y) ~ biospec_blood_hemoglobin_a1 + biospec_blood_wbc_count + 
+               biospec_blood_cholesterol + biospec_blood_hdl_cholesterol + biospec_blood_ferritin +
+               MAP + BMI + biospec_blood_baso_abs+
+                  biospec_blood_eos_abs+ biospec_blood_hemoglobin+
+                   biospec_blood_mcv+ biospec_blood_plt_count+
+                   biospec_blood_imm_gran_abs+ 
+                  biospec_blood_lymph_abs + biospec_blood_mono_abs+
+                   biospec_blood_mpv+ 
+                   biospec_blood_rdw+ biospec_blood_rbc_count+  NLR+
+         LMR+ PLR + 
+               (1 + biospec_blood_hemoglobin_a1 + biospec_blood_wbc_count + 
+               biospec_blood_cholesterol + biospec_blood_hdl_cholesterol + biospec_blood_ferritin +
+               MAP + BMI + biospec_blood_baso_abs+
+                  biospec_blood_eos_abs+ biospec_blood_hemoglobin+
+                   biospec_blood_mcv+ biospec_blood_plt_count+
+                   biospec_blood_imm_gran_abs+ 
+                  biospec_blood_lymph_abs + biospec_blood_mono_abs+
+                   biospec_blood_mpv+ 
+                   biospec_blood_rdw+ biospec_blood_rbc_count+  NLR+
+         LMR+ PLR | site_id_l), data = stand, # (slopes | rel_family_id)
+                 control = lmerControl(optimizer = "bobyqa"), REML = F) 
+# Takes too long
+
+### Random slopes included for site_id and family_id Maximal
+mod1_plus <- lmer(as.numeric(interview_age.y) ~ biospec_blood_hemoglobin_a1 + biospec_blood_wbc_count + 
+               biospec_blood_cholesterol + biospec_blood_hdl_cholesterol + biospec_blood_ferritin +
+               MAP + BMI + biospec_blood_baso_abs+
+                  biospec_blood_eos_abs+ biospec_blood_hemoglobin+
+                   biospec_blood_mcv+ biospec_blood_plt_count+
+                   biospec_blood_imm_gran_abs+ 
+                  biospec_blood_lymph_abs + biospec_blood_mono_abs+
+                   biospec_blood_mpv+ 
+                   biospec_blood_rdw+ biospec_blood_rbc_count+  NLR+
+         LMR+ PLR +  
+               (1 | site_id_l) + (1 | rel_family_id), data = stand, # (slopes | rel_family_id)
+                 control = lmerControl(optimizer = "bobyqa"), REML = F)
+
+# Run model anovas for each random effect slope added in. 
+
+### No random slopes for site_id
+mod2 <- lmer(as.numeric(interview_age.y) ~ biospec_blood_hemoglobin_a1 + biospec_blood_wbc_count + 
+               biospec_blood_cholesterol + biospec_blood_hdl_cholesterol + biospec_blood_ferritin +
+               MAP + BMI + biospec_blood_baso_abs+
+                  biospec_blood_eos_abs+ biospec_blood_hemoglobin+
+                   biospec_blood_mcv+ biospec_blood_plt_count+
+                   biospec_blood_imm_gran_abs+ 
+                  biospec_blood_lymph_abs + biospec_blood_mono_abs+
+                   biospec_blood_mpv+ 
+                   biospec_blood_rdw+ biospec_blood_rbc_count+  NLR+
+         LMR+ PLR + 
+               (1 | site_id_l), data = stand, 
+                 control = lmerControl(optimizer = "bobyqa"), REML = F)
+# Clustering by site
+mod3 <- lmer(as.numeric(interview_age.y) ~ (1 | site_id_l), data = stand, 
+             control = lmerControl(optimizer = "bobyqa"), REML = F)
+
+
+
+coef(summary(base))
+coef(summary(mod1))
+coef(summary(mod2))
+
+get_gof(base)
+get_gof(mod1)
+get_gof(mod2)
+
+
+
+```
+My sample size was not large enough to support the maximal random effects structure. However,
+the difference between the first and second models show that the location of data collection has an
+arguable significant effect on the biomarkers predicting age. I could not add any random slopes to 
+family id, most likely because there are too many different families or in other words, not enough 
+siblings in the sample.
+
+The second model performed slightly better than the first considering the rmse. However, this may be 
+biased as it does not take into account individual differences. Both models are most likely biased 
+as well, which will need to be corrected later.
+
+More Model Comparison
+```{r}
+icc(mod1)
+icc(mod2)
+icc(mod3) # 5% of variance in chronological age due to site.
+
+model.comparison(mod1, mod2)
+```
+
+
+```{r, results='hide'}
+summary(mod2)
+ranef(mod2)
+```
+
+
+Extracting Betas and Correlation with Chronological age
+```{r}
+library("Metrics")
+library("irr")
+
+# These fitted values are the predictions of age that our model made. This is our "biological age"
+BA <- predict(mod1_plus)
+write.csv(BA, "/Users/hansoochang/Drexel/ABCD/data/BA")
+
+co_df <- cbind(as.data.frame(BA), as.data.frame(stand$interview_age.y))
+View(co_df)
+
+co_df$`stand$interview_age.y` <- as.numeric(co_df$`stand$interview_age.y`)
+
+
+# Correlation, rmse, mae of BA and CA
+cor.test(co_df$BA, as.numeric(stand$interview_age.y))
+rmse(co_df$BA, as.numeric(stand$interview_age.y))
+mae(co_df$BA, as.numeric(stand$interview_age.y))
+icc(co_df, model = "twoway", type = "agreement", unit =
+      "single")
+
+```
+Adding rel_family_id as a random effect structure drastically improves correlation
+Convert to years 
+
+
+# Population characteristics
+```{r}
+stand
+
+# Find same family
+fam <- as.data.frame(table(stand$rel_family_id))
+fam[fam$Freq > 1, ] # 57 duplictes, meaning 114 participants with sibling in study
+
+# site
+table(stand$site_id_l)
+
+# eventname
+table(stand$eventname.y)
+
+```
+
+
+
+
+
+# 4 Year Follow Up (VER 5.0)
+```{r}
+wba_5 <- read.csv("/Users/hansoochang/Downloads/abcd-data-release-5.0/core/physical-health/ph_y_bld.csv", fill = NA)
+head(wba_5)
+
+```
+
+  
+

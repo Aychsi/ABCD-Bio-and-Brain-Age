@@ -1,0 +1,198 @@
+---
+title: "BioAge_HealthyUnhealthy_Merge_5.0.Rmd"
+output: html_document
+date: "2023-08-21"
+---
+
+This file reads in the blood-based biomarker (BBB) data and merges it with healthy and unhealthy participants. Also merges demographic data.
+
+1. Merge CBCL and PhysHealth to determine healthy and unhealthy
+2. Merge healthy and unhealthy data frame with BBB
+3. Merge demographic data
+4. Output data frame ready for training and testing.
+
+
+# Libraries
+```{r, warning=FALSE, error = FALSE, message=FALSE}
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(stringr)
+library(devtools)
+library(tidyr)
+library(reshape2)
+```
+
+
+# Read in Data
+```{r}
+# Read in CBCL
+p_cbcl_t <- read.csv(paste0(root, "Version5.0_Exported_Data/p_cbcl_t.csv"))
+
+# Child medical history
+mhx <- read.csv(paste0(root,"Version5.0_Exported_Data/mhx.csv"))
+
+# Read in BBB
+bbb <- read.csv(paste0(root, "Version5.0_Exported_Data/biomarkers_5.csv"))
+bbb %>% filter(eventname == "2_year_follow_up_y_arm_1")
+
+# Longitudinal Demographic data
+long_dem <- read.csv(paste0(root, "abcd-data-release-5.0/core/abcd-general/abcd_y_lt.csv"))
+
+# Data on gender
+gender_y <- read.csv(paste0(root, "abcd-data-release-5.0/core/gender-identity-sexual-health/gish_y_gi.csv"))
+
+gender_p <- read.csv(paste0(root, "abcd-data-release-5.0/core/gender-identity-sexual-health/gish_p_gi.csv"))
+
+gender_a <- read.csv(paste0(root, "abcd-data-release-5.0/core/abcd-general/abcd_p_demo.csv"))
+```
+
+
+# Merge mhx and p_cbcl_t
+## Baseline
+```{r}
+phys_ment <- merge(p_cbcl_t, mhx, by = c("src_subject_id", "eventname"))
+phys_ment <- phys_ment %>%
+  rename(ment_health = cbcl_tot, phys_health = tot_prob)
+
+# add a column that adds ment_health + phys_health
+table(phys_ment %>% filter(eventname == "baseline_year_1_arm_1") %>% select(phys_health))
+table(phys_ment %>% filter(eventname == "baseline_year_1_arm_1") %>% select(ment_health))
+
+phys_ment <- phys_ment %>%
+  mutate(phys_ment_health = ment_health + phys_health)
+
+
+# Distribution of physical or mental health problems at baseline
+table(phys_ment %>% filter(eventname == "2_year_follow_up_y_arm_1") %>% select(phys_ment_health))
+
+# Number of unique participants with physical and mental health info
+table(phys_ment$eventname)
+```
+
+# Merge phys_ment with bbb
+```{r}
+dim(bbb)
+bbb_healthy <- merge(bbb, 
+                     phys_ment %>% 
+                       filter(phys_ment_health == 0) %>%
+                       select(src_subject_id, eventname, ment_health, phys_health, phys_ment_health),
+                     by = c("src_subject_id", "eventname"))
+
+bbb_healthy %>% filter(eventname == "2_year_follow_up_y_arm_1")
+
+bbb_unhealthy <- merge(bbb, 
+                     phys_ment %>% 
+                       filter(phys_ment_health > 0) %>%
+                       select(src_subject_id, eventname, ment_health, phys_health, phys_ment_health),
+                     by = c("src_subject_id", "eventname"))
+
+bbb_unhealthy %>% filter(eventname == "2_year_follow_up_y_arm_1")
+
+```
+
+# Merge Demographic Data
+*** V.5.1 - Already did in initial.rmd
+```{r}
+# dem <- merge(gender_p %>% select(src_subject_id, eventname, demo_sex_v2), 
+#       long_dem %>% select(src_subject_id, eventname, site_id_l, rel_family_id, interview_age), 
+#       by = c("src_subject_id", "eventname"))
+# 
+# # Create Sex Column
+# dem <- dem %>%
+#   group_by(src_subject_id) %>%
+#   mutate(
+#     sex = ifelse(any(demo_sex_v2 == 1, na.rm = TRUE), ifelse(is.na(demo_sex_v2), 1, demo_sex_v2),
+#            ifelse(any(demo_sex_v2 == 2, na.rm = TRUE), ifelse(is.na(demo_sex_v2), 2, demo_sex_v2), demo_sex_v2))
+#   ) %>%
+#   ungroup()
+# 
+# # Add column for rel_family_id that does the same as the above for sex
+# dem <- dem %>%
+#   group_by(src_subject_id) %>%
+#   mutate(
+#     rel_family_id = ifelse(all(is.na(rel_family_id)), NA, first(rel_family_id[!is.na(rel_family_id)]))
+#   ) %>%
+#   ungroup()
+
+
+
+
+# Merge with healthy BBB
+bbb_healthy_dem <- bbb_healthy
+
+# Merge with unhealthy BBB
+bbb_unhealthy_dem <- bbb_unhealthy
+
+```
+
+
+# Clean each dataframe
+```{r}
+# Remove some unnecessary columns
+# bbb_healthy_dem <- bbb_healthy_dem %>% select(-c(X, demo_sex_v2))
+bbb_healthy_dem <- bbb_healthy_dem %>% select(-ends_with(".y"))
+# bbb_unhealthy_dem <- bbb_unhealthy_dem %>% select(-c(X, demo_sex_v2))
+bbb_unhealthy_dem <- bbb_unhealthy_dem %>% select(-ends_with(".y"))
+
+# Rename columns ending with ".x" to the same column without ".x"
+bbb_healthy_dem <- bbb_healthy_dem %>%
+  rename_all(~ gsub("\\.x$", "", .))
+bbb_unhealthy_dem <- bbb_unhealthy_dem %>%
+  rename_all(~ gsub("\\.x$", "", .))
+
+# Add age column
+bbb_healthy_dem$age <- (bbb_healthy_dem$interview_age) / 12
+bbb_unhealthy_dem$age <- (bbb_unhealthy_dem$interview_age) / 12
+
+```
+
+
+# Split into Time points BBB
+```{r}
+
+# Baseline
+bbb_healthy_dem_2year <- bbb_healthy_dem %>% filter(eventname == "2_year_follow_up_y_arm_1")
+bbb_unhealthy_dem_2year <- bbb_unhealthy_dem %>% filter(eventname == "2_year_follow_up_y_arm_1")
+
+# Year 2
+bbb_healthy_dem_3year <- bbb_healthy_dem %>% filter(eventname == "3_year_follow_up_y_arm_1")
+bbb_unhealthy_dem_3year <- bbb_unhealthy_dem %>% filter(eventname == "3_year_follow_up_y_arm_1")
+
+# Year 4
+bbb_healthy_dem_4year <- bbb_healthy_dem %>% filter(eventname == "4_year_follow_up_y_arm_1")
+bbb_unhealthy_dem_4year <- bbb_unhealthy_dem %>% filter(eventname == "4_year_follow_up_y_arm_1")
+
+bbb_2year <- rbind(bbb_healthy_dem_2year, bbb_unhealthy_dem_2year)
+bbb_3year <- rbind(bbb_healthy_dem_3year, bbb_unhealthy_dem_3year)
+bbb_4year <- rbind(bbb_healthy_dem_4year, bbb_unhealthy_dem_4year)
+
+```
+
+
+# Export
+```{r}
+write.csv(bbb_2year, paste0(root, "Version5.0_Exported_Data/bbb_2year.csv"))
+write.csv(bbb_3year, paste0(root, "Version5.0_Exported_Data/bbb_3year.csv"))
+write.csv(bbb_4year, paste0(root, "Version5.0_Exported_Data/bbb_4year.csv"))
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

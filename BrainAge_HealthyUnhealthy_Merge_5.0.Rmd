@@ -1,0 +1,367 @@
+---
+title: "BrainAge_HealthyUnhealthy_Merge_5.0"
+output: html_document
+date: "2023-07-18"
+---
+
+This file merges the GMV and Cortical Thickness data with healthy and unhealthy participants. Also merges demographic data.
+
+1. Merge CBCL and PhysHealth to determine healthy and unhealthy
+2. Merge healthy and unhealthy data frame with GMV
+3. Merge demographic data
+4. Output data frame ready for training and testing.
+
+
+# Libraries
+```{r, warning=FALSE, error = FALSE, message=FALSE}
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(stringr)
+library(devtools)
+library(tidyr)
+library(reshape2)
+```
+
+
+# Read in Data
+```{r}
+# Read in CBCL
+p_cbcl_t <- read.csv(paste0(root, "Version5.0_Exported_Data/p_cbcl_t.csv"))
+
+# Child medical history
+mhx <- read.csv(paste0(root,"Version5.0_Exported_Data/mhx.csv"))
+
+# Read in GMV
+gmv <- read.csv(paste0(root, "Version5.0_Exported_Data/smri_5_gvol_all_qc.csv"))
+
+# Read in Cort thick data
+thk <- read.csv(paste0(root, "Version5.0_Exported_Data/smri_5_thick_qc.csv"))
+
+# Longitudinal Demographic data
+long_dem <- read.csv(paste0(root, "abcd-data-release-5.1/core/abcd-general/abcd_y_lt.csv"))
+
+# Data on gender
+gender_y <- read.csv(paste0(root, "abcd-data-release-5.1/core/gender-identity-sexual-health/gish_y_gi.csv"))
+
+gender_p <- read.csv(paste0(root, "abcd-data-release-5.1/core/gender-identity-sexual-health/gish_p_gi.csv"))
+
+gender_a <- read.csv(paste0(root, "abcd-data-release-5.1/core/abcd-general/abcd_p_demo.csv"))
+
+
+nrow(p_cbcl_t %>% filter(eventname == "baseline_year_1_arm_1"))
+nrow(mhx %>% filter(eventname == "baseline_year_1_arm_1"))
+nrow(gmv %>% filter(eventname == "baseline_year_1_arm_1"))
+nrow(long_dem %>% filter(eventname == "baseline_year_1_arm_1"))
+nrow(gender %>% filter(eventname == "baseline_year_1_arm_1"))
+```
+
+
+# Merge mhx and p_cbcl_t
+## Baseline
+```{r}
+phys_ment <- merge(p_cbcl_t, mhx, by = c("src_subject_id", "eventname"))
+
+phys_ment <- phys_ment %>%
+  rename(tot_prob_phys = tot_prob)
+
+# add a column that adds ment_health + phys_health
+table(phys_ment %>% filter(eventname == "baseline_year_1_arm_1") %>% select(cbcl_tot))
+table(phys_ment %>% filter(eventname == "baseline_year_1_arm_1") %>% select(tot_prob_phys))
+
+# Ordinal
+phys_ment <- phys_ment %>%
+  mutate(phys_ment_health = cbcl_tot + tot_prob_phys)
+
+# Binary
+phys_ment$phys_ment_health_bin <- ifelse(phys_ment$phys_ment_health > 0, 1, 0)
+
+# Distribution of physical or mental health problems at baseline
+table(phys_ment %>% filter(eventname == "baseline_year_1_arm_1") %>% select(phys_ment_health))
+table(phys_ment %>% filter(eventname == "baseline_year_1_arm_1") %>% select(phys_ment_health_bin))
+
+# Number of unique participants with physical and mental health info
+table(phys_ment$eventname)
+
+write.csv(phys_ment, paste0(root, "Version5.0_Exported_Data/phys_ment.csv"))
+
+```
+More "unhealthy" than healthy. Many children with physical problems (mostly high fever)
+IMPORTANT: Only 4671 at 4 year follow up, but we don't need this time point. We only need baseline for calculating KDM. 
+
+
+# Merge phys_ment with GMV
+```{r}
+
+gmv_healthy <- merge(gmv, 
+                     phys_ment %>% 
+                       filter(phys_ment_health_bin == 0) %>%
+                       select(src_subject_id, eventname, cbcl_tot, 
+                              phys_health_bin:phys_ment_health_bin),
+                     by = c("src_subject_id", "eventname"))
+
+
+nrow(gmv_healthy %>% filter(eventname == "baseline_year_1_arm_1"))
+
+gmv_unhealthy <- merge(gmv, 
+                     phys_ment %>% 
+                       filter(phys_ment_health > 0) %>%
+                       select(src_subject_id, eventname, cbcl_tot, 
+                              phys_health_bin:phys_ment_health_bin),
+                     by = c("src_subject_id", "eventname"))
+
+
+nrow(gmv_unhealthy %>% filter(eventname == "baseline_year_1_arm_1"))
+
+
+
+
+```
+
+# Merge phys_ment with Cortical Thickness
+```{r}
+thk_healthy <- merge(thk, 
+                     phys_ment %>% 
+                       filter(phys_ment_health_bin == 0) %>%
+                       select(src_subject_id, eventname, phys_health_bin:phys_ment_health_bin),
+                     by = c("src_subject_id", "eventname"))
+
+thk_unhealthy <- merge(thk, 
+                     phys_ment %>% 
+                       filter(phys_ment_health_bin > 0) %>%
+                       select(src_subject_id, eventname, phys_health_bin:phys_ment_health_bin),
+                     by = c("src_subject_id", "eventname"))
+
+
+```
+
+
+# Merge Demographic Data
+```{r}
+dem <- merge(gender_p %>% select(src_subject_id, eventname, demo_sex_v2), 
+      long_dem %>% select(src_subject_id, eventname, site_id_l, rel_family_id, interview_age), 
+      by = c("src_subject_id", "eventname"))
+
+# Create Sex Column
+dem <- dem %>%
+  group_by(src_subject_id) %>%
+  mutate(
+    sex = ifelse(any(demo_sex_v2 == 1, na.rm = TRUE), ifelse(is.na(demo_sex_v2), 1, demo_sex_v2),
+           ifelse(any(demo_sex_v2 == 2, na.rm = TRUE), ifelse(is.na(demo_sex_v2), 2, demo_sex_v2), demo_sex_v2))
+  ) %>%
+  ungroup()
+
+# Add column for rel_family_id that does the same as the above for sex
+dem <- dem %>%
+  group_by(src_subject_id) %>%
+  mutate(
+    rel_family_id = ifelse(all(is.na(rel_family_id)), NA, first(rel_family_id[!is.na(rel_family_id)]))
+  ) %>%
+  ungroup()
+
+
+# Merge with healthy GMV
+gmv_healthy_dem <- merge(gmv_healthy, dem, by = c("src_subject_id", "eventname"))
+
+# Merge with unhealthy GMV
+gmv_unhealthy_dem <- merge(gmv_unhealthy, dem, by = c("src_subject_id", "eventname"))
+
+# Merge with healthy Cortical Thickness
+thk_healthy_dem <- merge(thk_healthy, dem, by = c("src_subject_id", "eventname"))
+
+# Merge with unhealthy Cortical Thickness
+thk_unhealthy_dem <- merge(thk_unhealthy, dem, by = c("src_subject_id", "eventname"))
+
+```
+
+# Clean each dataframe
+```{r}
+
+# clean_df <- function () {
+#   # Get rid of 
+#   
+#     tryCatch(
+#     {
+#       # Try this:
+#       as.numeric(x)
+#     },
+#     error = function(e) {
+#       # If there's an error, do this instead:
+#       message("Error occurred: ", e)
+#       NA  # This value will be used in case of error
+#     }
+#   )
+#   
+# }
+gmv_healthy_dem <- gmv_healthy_dem %>% select(-X) 
+gmv_unhealthy_dem <- gmv_unhealthy_dem %>% select(-X)
+
+# Add age column
+gmv_healthy_dem$age <- (gmv_healthy_dem$interview_age) / 12
+gmv_unhealthy_dem$age <- (gmv_unhealthy_dem$interview_age) / 12
+
+thk_healthy_dem <- thk_healthy_dem %>% select(-X) 
+thk_unhealthy_dem <- thk_unhealthy_dem %>% select(-X)
+
+# Add age column
+thk_healthy_dem$age <- (thk_healthy_dem$interview_age) / 12
+thk_unhealthy_dem$age <- (thk_unhealthy_dem$interview_age) / 12
+
+```
+
+# Split into Time points GMV
+```{r}
+# Baseline
+gmv_healthy_dem_base <- gmv_healthy_dem %>% filter(eventname == "baseline_year_1_arm_1")
+gmv_unhealthy_dem_base <- gmv_unhealthy_dem %>% filter(eventname == "baseline_year_1_arm_1")
+
+# Year 2
+gmv_healthy_dem_2year <- gmv_healthy_dem %>% filter(eventname == "2_year_follow_up_y_arm_1")
+gmv_unhealthy_dem_2year <- gmv_unhealthy_dem %>% filter(eventname == "2_year_follow_up_y_arm_1")
+
+# Year 4
+gmv_healthy_dem_4year <- gmv_healthy_dem %>% filter(eventname == "4_year_follow_up_y_arm_1")
+gmv_unhealthy_dem_4year <- gmv_unhealthy_dem %>% filter(eventname == "4_year_follow_up_y_arm_1")
+
+
+```
+
+# Split into Time points Cortical Thickness
+```{r}
+# Baseline
+thk_healthy_dem_base <- thk_healthy_dem %>% filter(eventname == "baseline_year_1_arm_1")
+thk_unhealthy_dem_base <- thk_unhealthy_dem %>% filter(eventname == "baseline_year_1_arm_1")
+
+# Year 2
+thk_healthy_dem_2year <- thk_healthy_dem %>% filter(eventname == "2_year_follow_up_y_arm_1")
+thk_unhealthy_dem_2year <- thk_unhealthy_dem %>% filter(eventname == "2_year_follow_up_y_arm_1")
+
+# Year 4
+thk_healthy_dem_4year <- thk_healthy_dem %>% filter(eventname == "4_year_follow_up_y_arm_1")
+thk_unhealthy_dem_4year <- thk_unhealthy_dem %>% filter(eventname == "4_year_follow_up_y_arm_1")
+
+```
+
+
+# Standardize by Gender GMV
+```{r}
+# Standardize each region by gender
+## NB: When scaling, it should only be by gender, not health
+## Returns list of scaled male and female dataframes
+# standardize <- function(healthy, unhealthy) {
+#   gmv_forScale <- rbind(healthy, unhealthy)
+# 
+#   ## Males
+#   gmv_forScale_male <- gmv_forScale %>% filter(sex == 1)
+# 
+#   gmv_forScale_male <- gmv_forScale_male %>%
+#     mutate(across(starts_with("smri_vol_cdk_banksstslh"):ends_with("smri_vol_scs_subcorticalgv"), scale))
+# 
+#   ## Females
+#   gmv_forScale_female <- gmv_forScale %>% filter(sex == 2)
+#   
+#   gmv_forScale_female <- gmv_forScale_female %>%
+#     mutate(across(starts_with("smri_vol_cdk_banksstslh"):ends_with("smri_vol_scs_subcorticalgv"), scale))
+#   
+#   return(rbind(gmv_forScale_male, gmv_forScale_female))
+# }
+
+# gmv_base <- standardize(gmv_healthy_dem_base, gmv_unhealthy_dem_base)
+# gmv_2year <- standardize(gmv_healthy_dem_2year, gmv_unhealthy_dem_2year)
+# gmv_4year <- standardize(gmv_healthy_dem_4year, gmv_unhealthy_dem_4year)
+
+gmv_base <- rbind(gmv_healthy_dem_base, gmv_unhealthy_dem_base)
+gmv_2year <- rbind(gmv_healthy_dem_2year, gmv_unhealthy_dem_2year)
+gmv_4year <- rbind(gmv_healthy_dem_4year, gmv_unhealthy_dem_4year)
+
+smri_list <- colnames(gmv_base %>% select(contains("smri")))
+
+for (smri in 1:length(smri_list)) {
+  hist(gmv_base[, smri_list[smri]], xlab = smri_list[smri])
+}
+```
+
+
+# Check Raw Values by Healthy and Unhealthy
+```{r}
+
+table(gmv_base$tot_prob_phys)
+table(gmv_base$cbcl_tot)
+
+
+gmv_base$group <- ifelse(gmv_base$phys_ment_health_bin > 0, "unhealthy", "healthy")
+table(gmv_base$group)
+
+smri_list <- colnames(gmv_base %>% select(contains("smri")))
+
+for (smri in smri_list) {
+  print(smri)
+  
+  print(
+    ggplot(gmv_base %>% filter(sex == 2), aes_string(x = smri, y = "..density..", fill = "group", alpha = 0.5)) +
+  geom_histogram(position = "identity", bins = 30) +
+  theme_minimal() +
+  labs(x = smri, y = "Frequency", fill = "group", title = "Overlaying Density Plots") +
+  guides(alpha = FALSE)
+  )
+}
+```
+
+
+# Standardize by Gender Cortical Thickness
+```{r}
+
+# Standardize each region by gender
+## NB: When scaling, it should only be by gender, not health
+## Returns list of scaled male and female dataframes
+# standardize <- function(healthy, unhealthy) {
+#   thk_forScale <- rbind(healthy, unhealthy)
+# 
+#   ## Males
+#   thk_forScale_male <- thk_forScale %>% filter(sex == 1)
+# 
+#   thk_forScale_male <- thk_forScale_male %>%
+#     mutate(across(starts_with("smri_thick_cdk_banksstslh"):ends_with("smri_thick_cdk_mean"), scale))
+# 
+#   ## Females
+#   thk_forScale_female <- thk_forScale %>% filter(sex == 2)
+#   
+#   thk_forScale_female <- thk_forScale_female %>%
+#     mutate(across(starts_with("smri_thick_cdk_banksstslh"):ends_with("smri_thick_cdk_mean"), scale))
+#   
+#   return(rbind(thk_forScale_male, thk_forScale_female))
+# }
+
+thk_base <- rbind(thk_healthy_dem_base, thk_unhealthy_dem_base)
+thk_2year <- rbind(thk_healthy_dem_2year, thk_unhealthy_dem_2year)
+thk_4year <- rbind(thk_healthy_dem_4year, thk_unhealthy_dem_4year)
+
+```
+
+
+# Export
+```{r}
+gmv_base <- gmv_base %>% select(-group)
+
+gmv_base$phys_ment_health
+
+write.csv(gmv_base, paste0(root, "Version5.0_Exported_Data/gmv_base.csv"))
+write.csv(gmv_2year, paste0(root, "Version5.0_Exported_Data/gmv_2year.csv"))
+write.csv(gmv_4year, paste0(root, "Version5.0_Exported_Data/gmv_4year.csv"))
+
+write.csv(thk_base, paste0(root, "Version5.0_Exported_Data/thk_base.csv"))
+write.csv(thk_2year, paste0(root, "Version5.0_Exported_Data/thk_2year.csv"))
+write.csv(thk_4year, paste0(root, "Version5.0_Exported_Data/thk_4year.csv"))
+
+```
+
+
+
+
+
+
+

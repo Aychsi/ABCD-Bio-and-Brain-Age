@@ -1,0 +1,76 @@
+---
+title: "CBCL_5.0"
+output: html_document
+date: "2023-07-18"
+---
+
+This document separates healthy from unhealthy participants by CBCL. This file does not merge biomarkers or GMV values. 
+
+
+# Libraries
+```{r, warning=FALSE, error = FALSE, message=FALSE}
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(stringr)
+library(devtools)
+library(neuroCombat)
+library(tidyr)
+library(reshape2)
+```
+
+
+# Read in Data
+```{r}
+# Parent CBCL
+p_cbcl <- read.csv(paste0(root,"abcd-data-release-5.1/core/mental-health/mh_p_cbcl.csv"))
+
+```
+
+
+# Split CBCL into healthy and unhealthy
+```{r}
+# Get columns with total summary score only
+p_cbcl_t <- p_cbcl %>%
+  select(src_subject_id, eventname, ends_with("_t"))
+
+skim(p_cbcl_t)
+```
+
+
+The broadband Internalizing Domain is a measure of emotional problems and contains three syndrome scales: Anxious/Depressed, Withdrawn/Depressed, and Somatic Complaints. The broadband Externalizing Domain measures behavioral problems and contains the Rule Breaking Behavior and Aggressive Behavior syndrome scales. Three other syndrome scales do not belong to either broadband scale: Social Problems, Thought Problems, and Attention Problems.
+
+“Clinically significant” elevations are indicated by T-scores ≥ 64 on the broadband scales and ≥70 on the syndrome scales. “Borderline” elevations range from 60 to 63 and 65 to 69 on the broadband and syndrome scales, respectively.
+
+## Find all that are above t-score of 67
+Add a column indicating whether or not the score is 67 or above
+```{r}
+
+p_cbcl_t$cbcl_tot <- rowSums(p_cbcl_t %>% 
+                                    select(-c(src_subject_id, eventname)) >= 67, 
+                                  na.rm = TRUE)
+
+
+table(p_cbcl_t$cbcl_tot)
+```
+about 20% have a mental health problem above a cutoff over three time points.
+
+# Export file
+```{r}
+write.csv(p_cbcl_t, paste0(root, "Version5.0_Exported_Data/p_cbcl_t.csv"))
+
+```
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,164 @@
+---
+title: "BrainAge_GMV_V5.0"
+output: html_document
+date: "2023-07-17"
+---
+
+This file reads in the GMV data necessary for a longitudinal analysis of Brain Age (Baseline, 2 year, 4 year). It also only includes values that pass the quality control threshold, and includes scanner information for use as a covariate. Also merges sex variable
+
+NB: Will need to get sex variable from gish_y_gi file
+
+# Libraries
+```{r}
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(stringr)
+library(devtools)
+library(neuroCombat)
+library(tidyr)
+library(reshape2)
+```
+
+
+# Read in Data
+```{r}
+# sMRI GMV data
+smri_5 <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.1/core/imaging/mri_y_smr_vol_dsk.csv")
+
+# QC Recommended Image Inclusion
+image_inc <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.1/core/imaging/mri_y_qc_incl.csv")
+
+# Quality Control - Manual - Post-processing - Structural MRI - T2w
+post_proc <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.1/core/imaging/mri_y_qc_incl.csv")
+
+# Quality Control - Manual - Freesurfer
+fsurf_qc <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.1/core/imaging/mri_y_qc_man_fsurf.csv")
+
+# Longitudinal Demographic data
+long_dem <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.1/core/abcd-general/abcd_y_lt.csv")
+
+# Longitudinal Demographic data
+mri_info <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.1/core/imaging/mri_y_adm_info.csv")
+
+# Data on gender
+gender <- read.csv("/Users/hansoochang/Drexel/ABCD/abcd-data-release-5.1/core/gender-identity-sexual-health/gish_y_gi.csv")
+
+
+```
+
+
+# Clean sMRI GMV Data and merge with subcortical file
+```{r}
+# GMV
+# Select only cortical volume measures
+# Make sure to not include white matter (ex. corpus callosum) or ventricles
+smri_5_gvol <- smri_5 %>% select(c("src_subject_id", "eventname",
+                                "smri_vol_cdk_banksstslh":"smri_vol_cdk_insularh", 
+                            "smri_vol_cdk_totallh":"smri_vol_cdk_total"))
+
+smri_5_gvol[smri_5_gvol == ""] <- NA
+smri_5_gvol <- smri_5_gvol[complete.cases(smri_5_gvol), ]
+
+
+
+# Subcortical GMV
+smri_5_sub_vol <- smri_5_sub %>% select(c("src_subject_id", "eventname", 
+                            "smri_vol_scs_crbcortexlh":"smri_vol_scs_pallidumlh",
+                            "smri_vol_scs_hpuslh":"smri_vol_scs_amygdalalh", 
+                            "smri_vol_scs_aal":"smri_vol_scs_vedclh", 
+                            "smri_vol_scs_crbcortexrh":"smri_vol_scs_amygdalarh", 
+                            "smri_vol_scs_aar":"smri_vol_scs_vedcrh", "smri_vol_scs_subcorticalgv"))
+smri_5_sub_vol[smri_5_sub_vol == ""] <- NA
+smri_5_sub_vol <- smri_5_sub_vol[complete.cases(smri_5_sub_vol), ]
+
+smri_5_gvol_all <- merge(smri_5_gvol, smri_5_sub_vol, by = c("src_subject_id", "eventname"))
+
+skim(smri_5_gvol_all) # 22854
+```
+
+# Quality Control for sMRI
+## t1w is used to calculate volume
+```{r}
+
+all_qc <- merge(fsurf_qc %>% select(src_subject_id, eventname, fsqc_qc),
+                post_proc %>% select(src_subject_id, eventname, imgincl_t1w_include),
+                by = c("src_subject_id", "eventname"))
+
+qc_remove <- all_qc %>% 
+  filter(fsqc_qc == 0 | imgincl_t1w_include == 0) %>% 
+  select(src_subject_id, eventname)
+
+smri_5_gvol_all_qc <- anti_join(smri_5_gvol_all, qc_remove, by = c("src_subject_id", "eventname"))
+
+```
+
+
+# Convert sMRI values to numeric
+```{r}
+smri_5_gvol_all_qc <- smri_5_gvol_all_qc %>% 
+  mutate_at(vars(contains("smri")), as.numeric)
+
+smri_5_gvol_all_qc <- smri_5_gvol_all_qc[complete.cases(smri_5_gvol_all_qc), ]
+
+skim(smri_5_gvol_all_qc) # 22197
+```
+
+
+# Check Distributions
+Seems pretty clean
+```{r}
+smri_list <- colnames(smri_5_gvol_all_qc %>% select(contains("smri")))
+
+for (smri in 1:length(smri_list)) {
+  hist(smri_5_gvol_all_qc[, smri_list[smri]], xlab = smri_list[smri])
+}
+
+
+
+```
+
+# Include MRI Manufacturer
+```{r}
+mri_info$mri_info_manufacturer <- as.factor(mri_info$mri_info_manufacturer)
+smri_5_gvol_all_qc <- merge(smri_5_gvol_all_qc, 
+                            mri_info %>% select(src_subject_id, eventname, mri_info_manufacturer), 
+                            by = c("src_subject_id", "eventname"))
+
+```
+
+
+# Export
+```{r}
+write.csv(smri_5_gvol_all_qc, paste0(root, "Version5.0_Exported_Data/smri_5_gvol_all_qc.csv"))
+head(smri_5_gvol_all_qc)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

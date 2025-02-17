@@ -1,0 +1,257 @@
+---
+title: "KDM_Organ_5.0_V1_Temp"
+format:
+  pdf: 
+    theme: cosmo
+    fontsize: 1.1em
+    linestretch: 1.7
+toc: true
+editor: visual
+---
+
+This file projects the trained KDM Organ 2 year data to year 3 and year 4. Output goes to MAE_BBB_Organ_Comp_Graphs.qmd
+
+Input: + all Organ DF's + All Organ R Object models
+
+Output: + Projected 3 and 4 year KDM data
+
+# Libraries
+
+```{r}
+#install.packages("flexsurv")
+#devtools::install_github("dayoonkwon/BioAge")
+#| warning: false
+
+root <- "/Users/hansoochang/Drexel/ABCD/"
+
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(pcaPP)
+library(stringr)
+library(stats)
+library(misty)
+library(emmeans)
+```
+
+# Read in Data
+```{r}
+#| warning: false
+
+# Dataframes 
+cv <- read.csv(paste0(root, "Version5.0_Exported_Data/cv.csv"))
+of <- read.csv(paste0(root, "Version5.0_Exported_Data/of.csv"))
+ms <- read.csv(paste0(root, "Version5.0_Exported_Data/ms.csv"))
+im <- read.csv(paste0(root, "Version5.0_Exported_Data/im.csv"))
+mb <- read.csv(paste0(root, "Version5.0_Exported_Data/mb.csv"))
+
+# R Model Data
+cv_mod <- readRDS(paste0(root, "Version5.0_Exported_Data/cv.rds"))
+of_mod <- readRDS(paste0(root, "Version5.0_Exported_Data/of.rds"))
+ms_mod <- readRDS(paste0(root, "Version5.0_Exported_Data/ms.rds"))
+im_mod <- readRDS(paste0(root, "Version5.0_Exported_Data/im.rds"))
+mb_mod <- readRDS(paste0(root, "Version5.0_Exported_Data/mb.rds"))
+
+# 2 Year Data
+cv_2 <- read.csv(paste0(root, "Version5.0_Exported_Data/cv_kdm.csv"))
+of_2 <- read.csv(paste0(root, "Version5.0_Exported_Data/of_kdm.csv"))
+ms_2 <- read.csv(paste0(root, "Version5.0_Exported_Data/ms_kdm.csv"))
+im_2 <- read.csv(paste0(root, "Version5.0_Exported_Data/im_kdm.csv"))
+mb_2 <- read.csv(paste0(root, "Version5.0_Exported_Data/mb_kdm.csv"))
+
+# 3 year dataframes
+cv_3 <- cv %>% filter(eventname == "3_year_follow_up_y_arm_1") 
+of_3 <- of %>% filter(eventname == "3_year_follow_up_y_arm_1") 
+ms_3 <- ms %>% filter(eventname == "3_year_follow_up_y_arm_1") 
+im_3 <- im %>% filter(eventname == "3_year_follow_up_y_arm_1") 
+mb_3 <- mb %>% filter(eventname == "3_year_follow_up_y_arm_1") 
+
+# 4 year dataframes
+cv_4 <- cv %>% filter(eventname == "4_year_follow_up_y_arm_1") 
+of_4 <- of %>% filter(eventname == "4_year_follow_up_y_arm_1") 
+ms_4 <- ms %>% filter(eventname == "4_year_follow_up_y_arm_1") 
+im_4 <- im %>% filter(eventname == "4_year_follow_up_y_arm_1") 
+mb_4 <- mb %>% filter(eventname == "4_year_follow_up_y_arm_1") 
+
+# Biomarkers list
+cv_bms <- cv_3 %>% select(MAP:biospec_blood_hemoglobin) %>% names()
+of_bms <- of_3 %>% select(biospec_blood_rbc_count:biospec_blood_rdw) %>% names()
+ms_bms <- ms_3 %>% select(BMI) %>% names()
+im_bms <- im_3 %>% select(biospec_blood_eos_abs:NLR) %>% names()
+mb_bms <- mb_3 %>% select(biospec_blood_cholesterol:biospec_blood_hemoglobin_a1) %>% names()
+
+of_3
+
+
+```
+
+# Calculate KDM Function
+
+```{r}
+
+calculate_kdm <- function(dataframe, biomarkers, kdm_train_bbb_sub) {
+  kdm_bbb_sub <- kdm_calc(dataframe, 
+                                 biomarkers = biomarkers, 
+                                 fit = kdm_train_bbb_sub$fit, 
+                                 s_ba2 = kdm_train_bbb_sub$fit$s_ba2)
+  
+  kdm_data_bbb_sub <- kdm_bbb_sub$data
+  
+  return(kdm_data_bbb_sub)
+}
+
+
+```
+
+# Project to 3 and 4 Year
+
+```{r}
+# Three Year 
+cv_3 <- calculate_kdm(cv_3, cv_bms, cv_mod)
+of_3 <- calculate_kdm(of_3, of_bms, of_mod)
+ms_3 <- calculate_kdm(ms_3, ms_bms, ms_mod)
+im_3 <- calculate_kdm(im_3, im_bms, im_mod)
+mb_3 <- calculate_kdm(mb_3, mb_bms, mb_mod)
+
+# 4 year 
+cv_4 <- calculate_kdm(cv_4, cv_bms, cv_mod)
+of_4 <- calculate_kdm(of_4, of_bms, of_mod)
+ms_4 <- calculate_kdm(ms_4, ms_bms, ms_mod)
+im_4 <- calculate_kdm(im_4, im_bms, im_mod)
+mb_4 <- calculate_kdm(mb_4, mb_bms, mb_mod)
+```
+
+# Merge and clean dataframes
+
+```{r, warning=F}
+
+# Assuming your data frames are df1, df2, df3, df4, and df5
+df_list_2 <- list(cv_2=cv_2, of_2=of_2, ms_2=ms_2, im_2=im_2, mb_2=mb_2)
+
+# Iterate over the list and modify the column names
+for (name in names(df_list_2)) {
+  colnames(df_list_2[[name]])[colnames(df_list_2[[name]]) == "kdm"] <- paste0("kdm_", name)
+  colnames(df_list_2[[name]])[colnames(df_list_2[[name]]) == "kdm_advance"] <- 
+    paste0("kdm_advance_", name)
+}
+
+# If you want to extract the modified data frames back to the global environment
+cv_2 <- df_list_2$cv_2
+of_2 <- df_list_2$of_2
+ms_2 <- df_list_2$ms_2
+im_2 <- df_list_2$im_2
+mb_2 <- df_list_2$mb_2
+
+# Merge the data frames
+merged_df_2 <- Reduce(function(x, y) merge(x, y, by=c("subjectkey", "eventname"), all=TRUE), df_list_2)
+
+# Select columns "subjectkey", "eventname", and any columns with "kdm" in their name
+sub_bbb_all_2 <- merged_df_2 %>%
+  select(subjectkey, eventname, age, contains("kdm"))
+
+# Check the filtered data frame
+sub_bbb_all_2
+
+
+# Merge by time points
+# Assuming your data frames are df1, df2, df3, df4, and df5
+df_list_3 <- list(cv_3=cv_3, of_3=of_3, ms_3=ms_3, 
+                im_3=im_3, mb_3=mb_3)
+
+# Iterate over the list and modify the column names
+for (name in names(df_list_3)) {
+  colnames(df_list_3[[name]])[colnames(df_list_3[[name]]) == "kdm"] <- paste0("kdm_", name)
+  colnames(df_list_3[[name]])[colnames(df_list_3[[name]]) == "kdm_advance"] <- 
+    paste0("kdm_advance_", name)
+}
+
+# If you want to extract the modified data frames back to the global environment
+cv_3 <- df_list_3$cv_3
+of_3 <- df_list_3$of_3
+ms_3 <- df_list_3$ms_3
+im_3 <- df_list_3$im_3
+mb_3 <- df_list_3$mb_3
+
+# Merge the data frames
+merged_df_3 <- Reduce(function(x, y) merge(x, y, by=c("src_subject_id", "eventname"), all=TRUE), df_list_3)
+
+# Select columns "subjectkey", "eventname", and any columns with "kdm" in their name
+sub_bbb_all_3 <- merged_df_3 %>%
+  select(src_subject_id, eventname,  age, contains("kdm"))
+
+# Check the filtered data frame
+sub_bbb_all_3
+
+
+# Assuming your data frames are df1, df2, df3, df4, and df5
+df_list_4 <- list(cv_4=cv_4, of_4=of_4, ms_4=ms_4, 
+                im_4=im_4, mb_4=mb_4)
+
+# Iterate over the list and modify the column names
+for (name in names(df_list_4)) {
+  colnames(df_list_4[[name]])[colnames(df_list_4[[name]]) == "kdm"] <- paste0("kdm_", name)
+  colnames(df_list_4[[name]])[colnames(df_list_4[[name]]) == "kdm_advance"] <- 
+    paste0("kdm_advance_", name)
+}
+
+# If you want to extract the modified data frames back to the global environment
+cv_4 <- df_list_4$cv_4
+of_4 <- df_list_4$of_4
+ms_4 <- df_list_4$ms_4
+im_4 <- df_list_4$im_4
+mb_4 <- df_list_4$mb_4
+
+# Merge the data frames
+merged_df_4 <- Reduce(function(x, y) merge(x, y, by=c("src_subject_id", "eventname"), all=TRUE), df_list_4)
+
+# Select columns "subjectkey", "eventname", and any columns with "kdm" in their name
+sub_bbb_all_4 <- merged_df_4 %>%
+  select(src_subject_id, eventname, age, contains("kdm"))
+
+# Check the filtered data frame
+sub_bbb_all_4
+
+
+
+```
+
+# Export
+
+```{r}
+write.csv(cv_3, paste0(root, "Version5.0_Exported_Data/cv_3.csv"))
+write.csv(of_3, paste0(root, "Version5.0_Exported_Data/of_3.csv"))
+write.csv(ms_3, paste0(root, "Version5.0_Exported_Data/ms_3.csv"))
+write.csv(im_3, paste0(root, "Version5.0_Exported_Data/im_3.csv"))
+write.csv(mb_3, paste0(root, "Version5.0_Exported_Data/mb_3.csv"))
+
+write.csv(cv_4, paste0(root, "Version5.0_Exported_Data/cv_4.csv"))
+write.csv(of_4, paste0(root, "Version5.0_Exported_Data/of_4.csv"))
+write.csv(ms_4, paste0(root, "Version5.0_Exported_Data/ms_4.csv"))
+write.csv(im_4, paste0(root, "Version5.0_Exported_Data/im_4.csv"))
+write.csv(mb_4, paste0(root, "Version5.0_Exported_Data/mb_4.csv"))
+
+sub_bbb_all_2 <- sub_bbb_all_2 %>%
+  rename(src_subject_id = subjectkey)
+
+write.csv(sub_bbb_all_2, paste0(root, "Version5.0_Exported_Data/sub_bbb_all_2.csv"))
+write.csv(sub_bbb_all_3, paste0(root, "Version5.0_Exported_Data/sub_bbb_all_3.csv"))
+write.csv(sub_bbb_all_4, paste0(root, "Version5.0_Exported_Data/sub_bbb_all_4.csv"))
+
+# File with all organ ages
+sub_bbb_all_2 <- sub_bbb_all_2 %>%
+  rename_with(~gsub("_\\d+$", "", .x))
+sub_bbb_all_3 <- sub_bbb_all_3 %>%
+  rename_with(~gsub("_\\d+$", "", .x))
+sub_bbb_all_4 <- sub_bbb_all_4 %>%
+  rename_with(~gsub("_\\d+$", "", .x))
+
+
+sub_bbb_all_organ <- rbind(rbind(sub_bbb_all_2, sub_bbb_all_3), sub_bbb_all_4)
+
+write.csv(sub_bbb_all_organ, paste0(root, "Version5.0_Exported_Data/sub_bbb_all_organ.csv"))
+ 
+```

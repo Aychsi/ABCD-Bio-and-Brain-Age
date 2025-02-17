@@ -1,0 +1,283 @@
+---
+title: "PhysHealth"
+output: html_document
+date: "2023-01-20"
+---
+
+# Physical health (did they go to the hospital for x) for 1-3 year time point. Baseline timepoint is in a different csv file. 
+```{r}
+phys <- read.csv("/Users/hansoochang/Drexel/ABCD/data/abcd_lpmh01.csv")
+phys <- phys[-1,]
+
+head(phys)
+skim(phys)
+```
+
+
+
+# Get only columns I want and split into collection timepoints
+Take out medical conditions like head injury that results from some external force.
+```{r}
+phys <- phys[, c(4,8,9,12,15:19,21,23:24,26:28,63)]
+phys <- select(phys, -contains(c("times", "notes")))
+
+phys_1 <- phys[which(phys$eventname == "1_year_follow_up_y_arm_1"), ]
+phys_2 <- phys[which(phys$eventname == "2_year_follow_up_y_arm_1"), ]
+phys_3 <- phys[which(phys$eventname == "3_year_follow_up_y_arm_1"), ]
+
+
+```
+
+
+# Remove missing cases
+The empty values in the dataframe seem to indicate "0" or not applicable
+```{r}
+phys_1 <- replace(phys_1, phys_1=='', NA)
+nrow(phys_1) # 11225
+nrow(phys_1[complete.cases(phys_1),]) # 10825
+phys_1 <- phys_1[complete.cases(phys_1),]
+
+phys_2 <- replace(phys_2, phys_2=='', NA)
+nrow(phys_2) # 10414
+nrow(phys_2[complete.cases(phys_2),]) # 6274
+phys_2 <- phys_2[complete.cases(phys_2),]
+
+phys_3 <- replace(phys_3, phys_3=='', NA)
+nrow(phys_3) # 6251
+nrow(phys_3[complete.cases(phys_3),]) # 2108
+phys_3 <- phys_3[complete.cases(phys_3),]
+
+```
+
+
+# Merge with Biomarkers cohort
+## Bio Age
+```{r}
+bm <- read.csv("/Users/hansoochang/Drexel/ABCD/data/biomarkers.csv")
+
+bm_phys_2 <- merge(bm, phys_2, by.x = c("subjectkey"), by.y =
+                   c("subjectkey"))
+
+length(unique(phys_2$subjectkey))
+length(phys_2$subjectkey)
+
+head(bm_phys_2)
+nrow(bm_phys_2)
+```
+Since there are only 273 participants who have both biomarker data and phys health data, let's try looking at phys health from the previous timepoint. 
+
+```{r}
+bm_phys_1 <- merge(bm, phys_1, by.x = c("subjectkey"), by.y =
+                   c("subjectkey"))
+
+head(bm_phys_1)
+nrow(bm_phys_1)
+```
+It seems that at timepoint 1, the sample size is much larger. We can use some of these timepoints to fill in the missing information.
+
+## Brain Age
+### GMV
+Only for year 2 timepoint for both brain age bms and physical data
+```{r}
+### Desikan Parcellation
+brain <- read.csv("/Users/hansoochang/Drexel/ABCD/data/smrip_gmv_y2.csv")
+
+brain_phys_2 <- merge(brain, phys_2, by = c("subjectkey", "eventname"))
+
+head(brain_phys_2)
+nrow(brain_phys_2) # 4370
+
+
+
+### Destrieux Parcellation 
+# brain <- read.csv("/Users/hansoochang/Drexel/ABCD/data/stand_dest_vol_y2.csv")
+# 
+# brain_phys_2 <- merge(brain, phys_2, by = c("subjectkey", "eventname"))
+# 
+# head(brain_phys_2)
+# nrow(brain_phys_2) # 4818
+```
+
+### Cortical Thickness
+```{r}
+### Desikan Parcellation
+cortthick <- read.csv("/Users/hansoochang/Drexel/ABCD/data/smrip_cortthick_y2.csv")
+
+cortthick_phys_2 <- merge(cortthick, phys_2, by = c("subjectkey", "eventname"))
+
+head(cortthick_phys_2)
+nrow(cortthick_phys_2) # 4117
+```
+
+
+
+## Get phys prob for brain age
+### GMV
+```{r}
+brain_phys_2$PhysProb <- 
+  ifelse(rowSums(as.data.frame(apply(brain_phys_2 
+                                     %>% select(contains("medhx")), 2, as.numeric))) > 0, 1, 0)
+
+
+write.csv(brain_phys_2, "/Users/hansoochang/Drexel/ABCD/data/brain_phys_2")
+```
+
+### Cortical Thickness
+```{r}
+cortthick_phys_2$PhysProb <- 
+  ifelse(rowSums(as.data.frame(apply(cortthick_phys_2 
+                                     %>% select(contains("medhx")), 2, as.numeric))) > 0, 1, 0)
+
+
+write.csv(cortthick_phys_2, "/Users/hansoochang/Drexel/ABCD/data/cortthick_phys_2")
+```
+
+
+
+
+# Merge Bio Age BM's with year 2 phys and if any missing, then year 1 phys
+```{r}
+bm_phys_2_left <- merge(bm, phys_2, by = c("subjectkey"), all.x = T)
+
+# Get incomplete cases for merging phys_2 and bm at year 2
+bm_phys_2_left_inc <- bm_phys_2_left[!complete.cases(bm_phys_2_left),]
+bm_inc_ind <- bm_phys_2_left_inc[, -c(39:51)]
+
+# final phys_1 and bm_2 merge
+bm_phys_2_1 <- merge(bm_inc_ind, phys_1, by = c("subjectkey"))
+
+# bind phys_1 and bm_2 merge and phys_2 and bm at year 2
+bm_2_phys_2_1 <- rbind(bm_phys_2_left[complete.cases(bm_phys_2_left),][,-c(37:38)], 
+                       bm_phys_2_1[,-c(37:40)]) 
+
+bm_2_phys_2_1[,c(37:49)] <- as.numeric(unlist(bm_2_phys_2_1[,c(37:49)]))
+
+bm_2_phys_2_1$PhysProb <- ifelse(rowSums(bm_2_phys_2_1[,c(37:49)]) > 0, 1, 0)
+skim(bm_2_phys_2_1)
+
+write.csv(bm_2_phys_2_1, "/Users/hansoochang/Drexel/ABCD/data/bm_2_phys_2_1")
+
+```
+
+# Look at any children who are on medications
+```{r}
+medsy <- read.delim("/Users/hansoochang/Drexel/ABCD/data/medsy01.txt")
+medsy <- medsy[-1, ]
+```
+
+Get only columns that I want
+```{r}
+
+# We just want to know if the child is taking any medications, and perhaps which ones.
+medsy_1 <- medsy[, c(4,9:10, 296)]
+
+medsy_1
+```
+0 = Yes; 1 = Yes; 2 = Refused - Record reason for refusal in Comments Section Se negó - anote el motivo por el cual se negó en la sección de Comentarios.; 3 = Took No Medications No usó ningún medicamento | Mark the form status as 'Unverified' if you are waiting on the parent to provide child's medications.//The ABCD Study will be describing all medications its participants are using, both prescription and over-the-counter. These include pills, liquid medications; skin patches, eye drops, creams, salves, inhalers and injections, as well as cold or allergy medications, vitamins, herbal remedies and other supplements
+
+```{r}
+table(medsy_1$brought_medications)
+table(medsy_1[medsy_1$eventname == "baseline_year_1_arm_1",]$brought_medications)
+medsy_1[which(medsy_1$brought_medications == 4), ]
+```
+
+
+# Split into healthy and unhealthy
+## Bio Age
+```{r}
+healthy_phys <- bm_2_phys_2_1[which(bm_2_phys_2_1$PhysProb == 0), ]
+unhealthy_phys <- bm_2_phys_2_1[which(bm_2_phys_2_1$PhysProb == 1), ]
+
+nrow(healthy_phys) # 568
+nrow(unhealthy_phys) # 85
+
+write.csv(healthy_phys, "/Users/hansoochang/Drexel/ABCD/data/healthy_phys")
+write.csv(unhealthy_phys, "/Users/hansoochang/Drexel/ABCD/data/unhealthy_phys")
+
+```
+
+
+## Brain Age
+### GMV
+```{r}
+healthy_brain_phys <- brain_phys_2[which(brain_phys_2$PhysProb == 0), ]
+unhealthy_brain_phys <- brain_phys_2[which(brain_phys_2$PhysProb == 1), ]
+
+nrow(healthy_brain_phys) # 3809
+nrow(unhealthy_brain_phys) # 561
+
+write.csv(healthy_brain_phys, "/Users/hansoochang/Drexel/ABCD/data/healthy_brain_phys")
+write.csv(unhealthy_brain_phys, "/Users/hansoochang/Drexel/ABCD/data/unhealthy_brain_phys")
+```
+
+### Cortical Thickness
+```{r}
+healthy_cortthick_phys <- cortthick_phys_2[which(cortthick_phys_2$PhysProb == 0), ]
+unhealthy_cortthick_phys <- cortthick_phys_2[which(cortthick_phys_2$PhysProb == 1), ]
+
+nrow(healthy_cortthick_phys) # 3711
+nrow(unhealthy_cortthick_phys) # 559
+
+
+write.csv(healthy_cortthick_phys, "/Users/hansoochang/Drexel/ABCD/data/healthy_cortthick_phys")
+write.csv(unhealthy_cortthick_phys, "/Users/hansoochang/Drexel/ABCD/data/unhealthy_cortthick_phys")
+```
+
+
+
+## Bio Age Phys Problems
+```{r}
+colnames(bm_2_phys_2_1)
+sort(colSums(bm_2_phys_2_1[,c(37:50)]))
+
+```
+From most common:
+1. Problems with Vision - 77 XXX
+2. Asthma - 44
+3. Very Bad Headaches - 24
+4. Hearing Problem - 13 XXX
+5. Bronchitis - 11
+6. Heart Problems - 8
+7. Diabetes - 7
+8. Epilepsy/seizures - 4
+9. Sickle Cell Anemia - 2
+10. Multiple Sclerosis - 2
+11. Muscular Dystrophy - 2
+12. Kidney Disease - 2
+13. Cerebral Palsy - 2
+14. Cancer/Leukemia - 2
+15. Seizure/Convulsion - 0
+
+## Brain Age Phys Problems
+### GMV
+```{r}
+colnames(brain_phys_2)
+brain_phys_2[,c(6:97, 99:112)] <- as.data.frame(apply(brain_phys_2[,c(6:97, 99:112)], 2, as.numeric))
+sort(colSums(brain_phys_2[,c(99:112)]))
+
+
+```
+1. A
+
+### Cortical Thickness
+```{r}
+colnames(cortthick_phys_2)
+cortthick_phys_2[,c(6:112, 115:128)] <- as.data.frame(apply(cortthick_phys_2[,c(6:112, 115:128)], 2, as.numeric))
+sort(colSums(brain_phys_2[,c(115:128)]))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

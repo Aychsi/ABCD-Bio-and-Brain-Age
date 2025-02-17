@@ -1,0 +1,387 @@
+---
+title: "KDM_BrainAge_Projections_5.0"
+output: html_document
+date: "2023-07-20"
+---
+
+This file projects the trained KDM baseline data to year 2 and year 4 for all brain ages.
+
+
+Input:
++ kdm_data_gmv_sub.csv (Projected Baseline KDM)
++ kdm_train_gmv_sub (Trained Model Fit)
+
+Output:
++ 
+
+
+# Libraries
+```{r}
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(pcaPP)
+library(stringr)
+library(stats)
+library(misty)
+library(emmeans)
+```
+
+
+# Read in files
+```{r}
+kdm_train_gmv_sub <- readRDS(paste0(root, "/summary_data/kdm_train_gmv_sub.rds"))
+
+kdm_data_gmv_sub_base <- read.csv(paste0(root, 
+                                         "Version5.0_Exported_Data/kdm_data_gmv_sub_baseline.csv")) %>%
+  select(-starts_with("X"))
+
+
+gmv_sub_2year <- read.csv(paste0(root, "Version5.0_Exported_Data/gmv_sub_all_stepaic.csv")) %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(-starts_with("X"))
+
+gmv_sub_4year <- read.csv(paste0(root, "Version5.0_Exported_Data/gmv_sub_all_stepaic.csv")) %>%
+  filter(eventname == "4_year_follow_up_y_arm_1") %>%
+  select(-starts_with("X"))
+
+# gmv_sub_2year <- read.csv(paste0(root, "Version5.0_Exported_Data/gmv_sub_2year.csv"))
+# gmv_sub_4year <- read.csv(paste0(root, "Version5.0_Exported_Data/gmv_sub_4year.csv"))
+
+brain_markers_sub <- colnames(gmv_sub_2year %>% select(contains("smri")))
+
+colnames(kdm_data_gmv_sub_base)
+colnames(gmv_sub_2year)
+```
+
+# Project to 2 Year
+```{r}
+kdm_gmv_sub_2year <- kdm_calc(gmv_sub_2year, biomarkers = brain_markers_sub, fit = kdm_train_gmv_sub$fit, s_ba2 = 
+                       kdm_train_gmv_sub$fit$s_ba2)
+
+kdm_data_gmv_sub_2year <- kdm_gmv_sub_2year$data
+
+
+```
+
+# 2 Year Metrics
+```{r}
+nrow(kdm_data_gmv_sub_2year)
+cor.test(as.numeric(kdm_data_gmv_sub_2year$kdm), as.numeric(kdm_data_gmv_sub_2year$age))
+Metrics::rmse(as.numeric(kdm_data_gmv_sub_2year$kdm), as.numeric(kdm_data_gmv_sub_2year$age))
+Metrics::mae(as.numeric(kdm_data_gmv_sub_2year$kdm), as.numeric(kdm_data_gmv_sub_2year$age))
+
+kdm_data_gmv_sub_2year$gender <- as.factor(kdm_data_gmv_sub_2year$sex)
+plot_ba(kdm_data_gmv_sub_2year, "kdm", "KDM\nBiological Age")
+
+```
+
+
+# Project to 4 Year
+```{r}
+kdm_gmv_sub_4year <- kdm_calc(gmv_sub_4year, biomarkers = brain_markers_sub, fit = kdm_train_gmv_sub$fit, s_ba2 = 
+                       kdm_train_gmv_sub$fit$s_ba2)
+
+kdm_data_gmv_sub_4year <- kdm_gmv_sub_4year$data
+```
+
+
+# 4 Year Metrics
+```{r}
+nrow(kdm_data_gmv_sub_4year)
+cor.test(as.numeric(kdm_data_gmv_sub_4year$kdm), as.numeric(kdm_data_gmv_sub_4year$age))
+Metrics::rmse(as.numeric(kdm_data_gmv_sub_4year$kdm), as.numeric(kdm_data_gmv_sub_4year$age))
+Metrics::mae(as.numeric(kdm_data_gmv_sub_4year$kdm), as.numeric(kdm_data_gmv_sub_4year$age))
+
+
+kdm_data_gmv_sub_4year$gender <- as.factor(kdm_data_gmv_sub_4year$sex)
+plot_ba(kdm_data_gmv_sub_4year, "kdm", "KDM\nBiological Age")
+```
+
+
+# Participants with all 3 Timepoints (Long)
+```{r}
+bind1 <- rbind(kdm_data_gmv_sub_base %>% 
+                 select(src_subject_id, eventname, phys_ment_health:gender, mri_info_manufacturer) %>%
+                 select(-phys_ment_health_bin), 
+                kdm_data_gmv_sub_2year %>% 
+                 select(src_subject_id, eventname, phys_ment_health:gender, mri_info_manufacturer))
+
+
+kdm_data_gmv_sub_long <- rbind(bind1, 
+                               kdm_data_gmv_sub_4year %>% 
+                                 select(src_subject_id, eventname, phys_ment_health:gender, 
+                                        mri_info_manufacturer))
+
+
+# Only include those with at least two timepoints
+kdm_data_gmv_sub_long_comp <- kdm_data_gmv_sub_long %>%
+  group_by(src_subject_id) %>%
+  filter(n() == 3) %>%
+  ungroup()
+
+
+```
+
+
+# Participants Wide Format
+```{r}
+# Add string names and subset columns ready for cbind
+kdm_data_gmv_sub_2year_forBind <- kdm_data_gmv_sub_2year %>% 
+                 select(src_subject_id, eventname, phys_ment_health, age, kdm, kdm_advance) %>%
+  rename_with(~ paste(.,"_2year", sep = ""), eventname:kdm_advance)
+
+
+kdm_data_gmv_sub_4year_forBind <- kdm_data_gmv_sub_4year %>% 
+                 select(src_subject_id, eventname, phys_ment_health, age, kdm, kdm_advance) %>%
+  rename_with(~ paste(.,"_4year", sep = ""), eventname:kdm_advance)
+
+
+
+m1 <- left_join(kdm_data_gmv_sub_base %>% 
+                 select(src_subject_id, eventname, phys_ment_health:gender, mri_info_manufacturer), 
+                kdm_data_gmv_sub_2year_forBind, 
+            by = c("src_subject_id"))
+
+kdm_data_gmv_sub_wide <- left_join(m1, 
+                               kdm_data_gmv_sub_4year_forBind, 
+                               by = c("src_subject_id"))
+
+# Get participants with at least 2 data points
+kdm_data_gmv_sub_wide <- kdm_data_gmv_sub_wide %>%
+  filter(rowSums(!is.na(select(., "eventname", "eventname_2year", "eventname_4year"))) >= 2)
+
+# Add time in program column
+kdm_data_gmv_sub_wide <- kdm_data_gmv_sub_wide %>%
+  mutate(time_in_program = case_when(
+    rowSums(!is.na(select(., "eventname", "eventname_2year", "eventname_4year"))) == 3 ~ 4,
+    rowSums(!is.na(select(., "eventname", "eventname_2year", "eventname_4year"))) >= 2 ~ 2,
+    TRUE ~ NA_integer_
+  ))
+
+```
+
+
+# Plot Longitudinal
+```{r}
+# Participants with at least 2 time points
+ggplot(data = kdm_data_gmv_sub_long, 
+       aes(x = age, y = kdm, group = src_subject_id, color = as.factor(sex))) +
+  geom_point() +                       # Add points
+  geom_line() +                        # Add lines connecting points
+  labs(x = "Chronological Age", y = "Brain Age", color = "sex") +
+  theme_minimal() 
+
+ggplot(data = kdm_data_gmv_sub_long, 
+       aes(x = age, y = kdm, group = src_subject_id, color = as.factor(sex))) +
+  geom_point() +                       # Add points
+  geom_line(alpha = 0.5) +             # Add lines connecting points with lighter color (alpha = 0.5)
+  labs(x = "Chronological Age", y = "Brain Age", color = "sex") +
+  theme_minimal() +
+  facet_wrap(~ as.factor(sex), ncol = 1)  # Separate graphs for female and male
+
+# Participants with 3 time points
+ggplot(data = kdm_data_gmv_sub_long_comp, 
+       aes(x = age, y = kdm, group = src_subject_id, color = as.factor(sex))) +
+  geom_point() +                       # Add points
+  geom_line() +                        # Add lines connecting points
+  labs(x = "Chronological Age", y = "Brain Age", color = "sex") +
+  theme_minimal() 
+
+ggplot(data = kdm_data_gmv_sub_long_comp, 
+       aes(x = age, y = kdm, group = src_subject_id, color = as.factor(sex))) +
+  geom_point() +                       # Add points
+  geom_line(alpha = 0.5) +             # Add lines connecting points with lighter color (alpha = 0.5)
+  labs(x = "Chronological Age", y = "Brain Age", color = "sex") +
+  theme_minimal() +
+  facet_wrap(~ as.factor(sex), ncol = 1)  # Separate graphs for female and male
+
+ggplot(data = kdm_data_gmv_sub_long_comp, 
+       aes(x = age, y = kdm_advance, group = src_subject_id, color = as.factor(sex))) +
+  geom_point() +                       # Add points
+  geom_line(alpha = 0.5) +             # Add lines connecting points with lighter color (alpha = 0.5)
+  labs(x = "Chronological Age", y = "KDM Advance", color = "sex") +
+  theme_minimal() +
+  facet_wrap(~ as.factor(sex), ncol = 1)  # Separate graphs for female and male
+
+```
+
+
+# Write 2 and 4 Year, and all 3 timepoint KDM Projections
+```{r}
+write.csv(kdm_data_gmv_sub_2year, paste0(root, "summary_data/kdm_data_gmv_sub_2year.csv"))
+write.csv(kdm_data_gmv_sub_4year, paste0(root, "summary_data/kdm_data_gmv_sub_4year.csv"))
+write.csv(kdm_data_gmv_sub_long, paste0(root, "summary_data/kdm_data_gmv_sub_long.csv"))
+write.csv(kdm_data_gmv_sub_long_comp, paste0(root, "summary_data/kdm_data_gmv_sub_long_comp.csv"))
+write.csv(kdm_data_gmv_sub_wide, paste0(root, "summary_data/kdm_data_gmv_sub_wide.csv"))
+
+cor.test(kdm_data_gmv_sub_long_comp$kdm, kdm_data_gmv_sub_long_comp$age)
+
+```
+
+
+# CORTICAL THICKNESS AND BOTH 
+
+## Read in Data
+```{r}
+# Cortical Thickness
+kdm_train_thk_sub <- readRDS(paste0(root, "/summary_data/kdm_train_thk_sub.rds"))
+
+kdm_data_thk_sub_base <- read.csv(paste0(root, "Version5.0_Exported_Data/kdm_data_thk_sub.csv"))
+
+thk_sub_2year <- read.csv(paste0(root, "Version5.0_Exported_Data/thk_sub_2year.csv"))
+thk_sub_4year <- read.csv(paste0(root, "Version5.0_Exported_Data/thk_sub_4year.csv"))
+
+thk_markers_sub <- colnames(thk_sub_2year %>% select(contains("smri")))
+
+
+# Both
+kdm_train_gmv_thk_sub <- readRDS(paste0(root, "/summary_data/kdm_train_gmv_thk_sub.rds"))
+
+kdm_data_gmv_thk_sub_base <- read.csv(paste0(root, "Version5.0_Exported_Data/kdm_data_gmv_thk_sub.csv"))
+
+gmv_thk_sub_2year <- read.csv(paste0(root, "Version5.0_Exported_Data/gmv_thk_sub_2year.csv"))
+gmv_thk_sub_4year <- read.csv(paste0(root, "Version5.0_Exported_Data/gmv_thk_sub_4year.csv"))
+
+gmv_thk_markers_sub <- colnames(kdm_data_gmv_thk_sub_base %>% select(contains("smri")))
+
+
+```
+
+## Function to Project KDM Data
+```{r}
+project_kdm_data <- function(data_base, data_2year, data_4year, fit_model, markers) {
+  library(dplyr)
+  
+  data_2year$gender <- data_2year$sex
+  
+  # Project to 2 Year
+  kdm_bbb_sub_2year <- kdm_calc(data_2year, biomarkers = markers, fit = fit_model$fit, 
+                                s_ba2 = fit_model$fit$s_ba2)
+  kdm_data_bbb_sub_2year <- kdm_bbb_sub_2year$data
+  
+  data_4year$gender <- data_4year$sex
+
+  
+  data_base <- data_base %>% select(-starts_with("X"))
+  kdm_data_bbb_sub_2year <- kdm_data_bbb_sub_2year %>% select(-starts_with("X"))
+  
+  # Project to 4 Year
+  kdm_bbb_sub_4year <- kdm_calc(data_4year, biomarkers = markers, fit = fit_model$fit, 
+                                s_ba2 = fit_model$fit$s_ba2)
+  kdm_data_bbb_sub_4year <- kdm_bbb_sub_4year$data
+  
+  kdm_data_bbb_sub_4year <- kdm_data_bbb_sub_4year %>% select(-starts_with("X"))
+  
+  # Participants with at least 2 Timepoints (Long)
+  bind1 <- rbind(data_base %>% select(src_subject_id, eventname, all_of(markers), 
+                                      phys_ment_health:gender, kdm, kdm_advance),
+                 kdm_data_bbb_sub_2year %>% select(src_subject_id, eventname, all_of(markers), 
+                                                   phys_ment_health:gender, kdm, kdm_advance))
+  
+  
+  kdm_data_bbb_sub_long <- rbind(bind1, 
+                                 kdm_data_bbb_sub_4year %>% select(src_subject_id, eventname, 
+                                                                   all_of(markers), 
+                                                                   phys_ment_health:gender, 
+                                                                   kdm, kdm_advance))
+  
+  # Only include those with at least two timepoints
+  kdm_data_bbb_sub_long_comp <- kdm_data_bbb_sub_long %>%
+    group_by(src_subject_id) %>%
+    filter(n() >= 2) %>%
+    ungroup()
+  
+  # Bind all time points together
+  kdm_data_bbb_all <- rbind(rbind(data_base, kdm_data_bbb_sub_2year), kdm_data_bbb_sub_4year)
+  
+  return(list(kdm_2year = kdm_data_bbb_sub_2year,
+              kdm_4year = kdm_data_bbb_sub_4year,
+              kdm_all = kdm_data_bbb_all,
+              kdm_comp = kdm_data_bbb_sub_long_comp))
+}
+
+
+
+
+```
+
+
+
+## Project Cortical Thickness and Both
+```{r}
+
+thk_proj <- project_kdm_data(
+  data_base = kdm_data_thk_sub_base,
+  data_2year = thk_sub_2year,
+  data_4year = thk_sub_4year,
+  fit_model = kdm_train_thk_sub,
+  markers = thk_markers_sub
+)
+
+thk_2year_data <- thk_proj$kdm_2year
+thk_4year_data <- thk_proj$kdm_4year
+thk_all_year_data <- thk_proj$kdm_all
+thk_comp_data <- thk_proj$kdm_comp
+
+gmv_thk_proj <- project_kdm_data(
+  data_base = kdm_data_gmv_thk_sub_base,
+  data_2year = gmv_thk_sub_2year,
+  data_4year = gmv_thk_sub_4year,
+  fit_model = kdm_train_gmv_thk_sub,
+  markers = gmv_thk_markers_sub
+)
+
+gmv_thk_2year_data <- gmv_thk_proj$kdm_2year
+gmv_thk_4year_data <- gmv_thk_proj$kdm_4year
+gmv_thk_all_year_data <- gmv_thk_proj$kdm_all
+gmv_thk_comp_data <- gmv_thk_proj$kdm_comp
+
+```
+
+## Metrics Thickness and GMV
+### 2 year
+```{r}
+nrow(gmv_thk_2year_data)
+cor.test(as.numeric(gmv_thk_2year_data$kdm), as.numeric(gmv_thk_2year_data$age))
+Metrics::rmse(as.numeric(gmv_thk_2year_data$kdm), as.numeric(gmv_thk_2year_data$age))
+Metrics::mae(as.numeric(gmv_thk_2year_data$kdm), as.numeric(gmv_thk_2year_data$age))
+
+
+gmv_thk_2year_data$gender <- as.factor(gmv_thk_2year_data$sex)
+plot_ba(gmv_thk_2year_data, "kdm", "KDM\nBiological Age")
+
+```
+
+
+
+
+## Export 
+```{r}
+write.csv(thk_2year_data, paste0(root, "Version5.0_Exported_Data/thk_2year_data.csv"))
+write.csv(thk_4year_data, paste0(root, "Version5.0_Exported_Data/thk_4year_data.csv"))
+write.csv(thk_all_year_data, paste0(root, "Version5.0_Exported_Data/thk_all_year_data.csv"))
+write.csv(thk_comp_data, paste0(root, "Version5.0_Exported_Data/thk_comp_data.csv"))
+
+write.csv(gmv_thk_2year_data, paste0(root, "Version5.0_Exported_Data/gmv_thk_2year_data.csv"))
+write.csv(gmv_thk_4year_data, paste0(root, "Version5.0_Exported_Data/gmv_thk_4year_data.csv"))
+write.csv(gmv_thk_all_year_data, paste0(root, "Version5.0_Exported_Data/gmv_thk_all_year_data.csv"))
+write.csv(gmv_thk_comp_data, paste0(root, "Version5.0_Exported_Data/gmv_thk_comp_data.csv"))
+
+
+```
+
+
+
+
+
+
+
+
+
+
+

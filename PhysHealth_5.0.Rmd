@@ -1,0 +1,91 @@
+---
+title: "PhysHealth_5.0"
+output: html_document
+date: "2023-07-18"
+---
+
+This file separates unhealthy from healthy participants by physical health. This file does not merge biomarkers or GMV.
+
+
+# Libraries
+```{r, warning=FALSE, error = FALSE, message=FALSE}
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(stringr)
+library(devtools)
+library(neuroCombat)
+library(tidyr)
+library(reshape2)
+```
+
+
+# Read in Data
+```{r}
+# Child medical history
+mhx <- read.csv(paste0(root,"abcd-data-release-5.1/core/physical-health/ph_p_mhx.csv"))
+
+```
+
+
+# Filter by relevant columns
+```{r}
+mhx <- mhx %>% select(src_subject_id, eventname, medhx_2a:medhx_2q, medhx_6h, 
+                               medhx_6l, medhx_6p, medhx_11, medhx_12, medhx_2a_l:medhx_2q_l, medhx_6h_l, 
+                               medhx_6l_l, medhx_6p_l, medhx_11_l, medhx_12_l)
+
+# Reverse medhx_11, medhx_12, medhx_11_l, medhx_12_l (Yes is healthy)
+mhx <- mhx %>%
+  mutate_at(vars(medhx_11, medhx_12, medhx_11_l, medhx_12_l), ~recode(., `0` = 1, `1` = 0))
+
+mhx %>% mutate_at(vars(medhx_2a:medhx_12_l), as.factor) %>% skim()
+```
+
+Columns ending with _l are for follow-up time points. Baseline results have their own columns
+
+
+# Find all rows with a significant physical health problem
+NB: Take out vision problems, hearing problems
+```{r}
+mhx <- mhx %>% select(-c(medhx_2n, medhx_2n_l, medhx_2i, medhx_2i_l))
+
+# Binary column if participant has any problem
+mhx$phys_health_bin <- ifelse(rowSums(mhx %>% select(-c(src_subject_id, eventname)) >= 1, 
+                                  na.rm = TRUE) > 0, 1, 0)
+
+# Total number of problems by row
+tot_prob <- rowSums(mhx %>% select(medhx_2a:medhx_12_l), na.rm = T)
+mhx$tot_prob <- tot_prob
+
+table(mhx %>% filter(eventname == "baseline_year_1_arm_1") %>% select(tot_prob))
+```
+
+
+# Visualize
+```{r}
+column_sums <- colSums(mhx %>% select(medhx_2a:medhx_12_l), na.rm = T)
+
+columns_sums_base <- colSums(mhx %>% filter(eventname == "baseline_year_1_arm_1") %>% 
+                               select(medhx_2a:medhx_12_l), na.rm = T)
+sort(columns_sums_base)
+```
+Top are
+1. allergies (baseline)
+2. High fever (baseline)
+3. allergies (follow-up)
+4. asthma (baseline)
+5. asthma (follow-up)
+6. high-fever (follow_up)
+7. bronchitis (baseline)
+
+# Export
+```{r}
+write.csv(mhx, paste0(root, "Version5.0_Exported_Data/mhx.csv"))
+```
+
+
+

@@ -1,0 +1,210 @@
+---
+title: "KDM_THK_5.0_V1"
+format:
+  html: 
+    theme: cosmo
+    fontsize: 1.1em
+    linestretch: 1.7
+toc: true
+editor: visual
+---
+
+This file runs the first iteration of KDM Cortical Thickness analyses by training on baseline. Reads in subsetted Cortical Thickness ROIs
+
+Input: + thk_sub.csv
+
+Output: + kdm_train_thk_sub.rds (Trained model) + (Projected KDM values for baseline)
+
+1.  Read in data and split into healthy and unhealthy
+2.  Split into time points
+3.  Split healthy into training and test
+4.  Train healthy
+5.  Test healthy
+6.  Project to unhealthy group
+7.  T-Test
+8.  Write csv file
+
+# Libraries
+
+```{r}
+#install.packages("flexsurv")
+#devtools::install_github("dayoonkwon/BioAge")
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(pcaPP)
+library(stringr)
+library(stats)
+library(misty)
+library(emmeans)
+```
+
+# Read in Data
+
+```{r}
+thk <- read.csv(paste0(root, "Version5.0_Exported_Data/thk_sub_flip.csv"))
+
+# thk <- read.csv(paste0(root, "Version5.0_Exported_Data/thk_sub_base.csv"))
+
+colnames(thk)
+
+```
+
+# Split Baseline into healthy and unhealthy
+
+```{r}
+thk_healthy <- thk %>% filter(eventname == "baseline_year_1_arm_1") %>% filter(phys_ment_health == 0)
+thk_unhealthy <- thk %>% filter(eventname == "baseline_year_1_arm_1") %>% filter(phys_ment_health != 0)
+
+nrow(thk_healthy)
+nrow(thk_unhealthy)
+```
+
+# Split Healthy Group for baseline
+
+```{r}
+set.seed(18)
+
+### Healthy Training ###
+samp <- sample(c(TRUE, FALSE), nrow(thk_healthy), replace=TRUE, prob=c(0.4,0.6))
+thk_train <- thk_healthy[samp, ]
+thk_test <- thk_healthy[!samp, ]
+
+nrow(thk_train) # 1085
+nrow(thk_test) # 2490
+```
+
+# Train Healthy
+
+```{r}
+brain_markers_sub <- colnames(thk_train %>% select(contains("smri")))
+
+kdm_train_thk_sub <- kdm_calc(thk_train, biomarkers = brain_markers_sub)
+
+saveRDS(kdm_train_thk_sub, file = "/Users/hansoochang/Drexel/ABCD/summary_data/kdm_train_thk_sub.rds")
+```
+
+#Correlation tests between kdm_age and chronological age
+
+```{r}
+nrow(kdm_train_thk_sub$data)
+hist(kdm_train_thk_sub$data$age)
+cor.test(as.numeric(kdm_train_thk_sub$data$kdm), as.numeric(kdm_train_thk_sub$data$age))
+Metrics::rmse(as.numeric(kdm_train_thk_sub$data$kdm), as.numeric(kdm_train_thk_sub$data$age))
+Metrics::mae(as.numeric(kdm_train_thk_sub$data$kdm), as.numeric(kdm_train_thk_sub$data$age))
+
+```
+
+# Project to test
+
+```{r}
+kdm_test_thk_sub_test <- kdm_calc(thk_test, biomarkers = brain_markers_sub, 
+                                  fit = kdm_train_thk_sub$fit, s_ba2 = 
+                       kdm_train_thk_sub$fit$s_ba2)
+
+kdm_data_thk_sub_test <- kdm_test_thk_sub_test$data
+```
+
+# Correlation tests between kdm_age (both genders) and chronological age
+
+```{r}
+nrow(kdm_data_thk_sub_test)
+cor.test(as.numeric(kdm_data_thk_sub_test$kdm), as.numeric(kdm_data_thk_sub_test$age))
+Metrics::rmse(as.numeric(kdm_data_thk_sub_test$kdm), as.numeric(kdm_data_thk_sub_test$age))
+Metrics::mae(as.numeric(kdm_data_thk_sub_test$kdm), as.numeric(kdm_data_thk_sub_test$age))
+
+kdm_data_thk_sub_test$gender <- as.factor(kdm_data_thk_sub_test$sex)
+#plot age vs bioage
+plot_ba(kdm_data_thk_sub_test, "kdm", "KDM\nBiological Age")
+
+```
+
+# Project trained model onto Unhealthy cohort
+
+## Get prediction
+
+```{r}
+
+kdm_unhealthy_thk_sub <- kdm_calc(thk_unhealthy, 
+                                    biomarkers = brain_markers_sub, 
+                                    fit = kdm_train_thk_sub$fit, 
+                                    s_ba2 = kdm_train_thk_sub$fit$s_ba2)
+
+kdm_data_unhealthy_thk_sub <- kdm_unhealthy_thk_sub$data 
+
+
+```
+
+# Correlation test between KDM age and Chronological Age for Unhealthy cohort
+
+```{r}
+nrow(kdm_data_unhealthy_thk_sub)
+cor.test(as.numeric(kdm_data_unhealthy_thk_sub$kdm), as.numeric(kdm_data_unhealthy_thk_sub$age))
+Metrics::rmse(as.numeric(kdm_data_unhealthy_thk_sub$kdm), as.numeric(kdm_data_unhealthy_thk_sub$age))
+Metrics::mae(as.numeric(kdm_data_unhealthy_thk_sub$kdm), as.numeric(kdm_data_unhealthy_thk_sub$age))
+
+
+kdm_data_unhealthy_thk_sub$gender <- as.factor(kdm_data_unhealthy_thk_sub$sex)
+plot_ba(kdm_data_unhealthy_thk_sub, "kdm", "KDM\nBiological Age")
+
+```
+
+# Test for Normality for KDM
+
+```{r}
+# variances are approximately = 1
+
+# KDM Biological Age
+shapiro.test(kdm_data_thk_sub_test$kdm)
+#shapiro.test(kdm_data_unhealthy_thk_sub$kdm)
+
+ggdensity(kdm_data_thk_sub_test$kdm)
+ggdensity(kdm_data_unhealthy_thk_sub$kdm)
+ggdensity(kdm_data_thk_sub_test$age) 
+
+ggqqplot(kdm_data_thk_sub_test$kdm)
+ggqqplot(kdm_data_unhealthy_thk_sub$kdm)
+
+hist(kdm_data_thk_sub_test$kdm, xlab = "KDM Value")
+hist(kdm_data_thk_sub_test$kdm_advance, xlab = "KDM Advance Value")
+
+hist(kdm_data_unhealthy_thk_sub$kdm, xlab = "KDM Value")
+hist(kdm_data_unhealthy_thk_sub$kdm_advance, xlab = "KDM Advance Value")
+```
+
+# T-Test
+
+```{r}
+sd(kdm_data_thk_sub_test$kdm)
+sd(kdm_data_unhealthy_thk_sub$kdm)
+
+sd(kdm_data_thk_sub_test$kdm_advance)
+sd(kdm_data_unhealthy_thk_sub$kdm_advance)
+
+# T-Test for average healthy KDM and unhealthy KDM
+t.test(kdm_data_thk_sub_test$kdm, kdm_data_unhealthy_thk_sub$kdm,
+       alternative = "two.sided", var.equal = T)
+
+# T-Test for average healthy KDM_advance and unhealthy KDM_advance
+t.test(kdm_data_thk_sub_test$kdm_advance, kdm_data_unhealthy_thk_sub$kdm_advance, 
+       alternative = "two.sided", var.equal = T)
+
+# t.test between chronological ages
+t.test(kdm_data_thk_sub_test$age, kdm_data_unhealthy_thk_sub$age, 
+       alternative = "two.sided", var.equal = TRUE)
+
+```
+
+# Write Baseline Projections
+
+```{r}
+# Merge Test and Unhealhty cohort
+kdm_data_thk_sub <- rbind(kdm_data_thk_sub_test, kdm_data_unhealthy_thk_sub)
+
+write.csv(kdm_data_thk_sub, paste0(root, "Version5.0_Exported_Data/kdm_data_thk_sub.csv"))
+
+```

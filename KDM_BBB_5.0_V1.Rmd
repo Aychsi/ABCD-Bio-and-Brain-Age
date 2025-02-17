@@ -1,0 +1,231 @@
+---
+title: "KDM_BBB_5.0_V1"
+output: html_document
+date: "2023-08-24"
+---
+
+This file runs the first iteration of KDM analyses by training on baseline for Blood-Based Biomarkers (BBB). Reads in standardized Blood-Based Biomarker data
+
+Input:
++ bbb_sub.csv
+
+Output:
++ kdm_train_bbb_sub.rds (Trained model)
++ (Projected KDM values for baseline) 
+
+1. Read in data and split into healthy and unhealthy
+2. Split into time points
+3. Split healthy into training and test
+4. Train healthy
+5. Test healthy
+6. Project to unhealthy group
+7. T-Test 
+9. Write csv file
+
+
+# Libraries
+```{r}
+#install.packages("flexsurv")
+#devtools::install_github("dayoonkwon/BioAge")
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(pcaPP)
+library(stringr)
+library(stats)
+library(misty)
+library(emmeans)
+```
+
+
+# Read in Data
+```{r}
+bbb <- read.csv(paste0(root, "Version5.0_Exported_Data/bbb_all_flipped.csv"))
+table(bbb$eventname)
+bbb %>% filter(eventname == "2_year_follow_up_y_arm_1") %>% filter(phys_ment_health == 0)
+bbb %>% filter(eventname == "2_year_follow_up_y_arm_1") %>% filter(phys_ment_health > 0)
+
+```
+
+
+# Split Baseline into healthy and unhealthy
+```{r}
+
+bbb %>% 
+  filter(eventname == "2_year_follow_up_y_arm_1") %>% skim()
+
+bbb_healthy_2year <- bbb %>% 
+  filter(eventname == "2_year_follow_up_y_arm_1") %>% 
+  filter(phys_ment_health == 0)
+
+bbb_unhealthy_2year <- bbb %>% 
+  filter(eventname == "2_year_follow_up_y_arm_1") %>% 
+  filter(phys_ment_health != 0)
+
+bbb_healthy_2year %>% select(biospec_blood_hemoglobin_a1:PLR)  %>%
+  complete.cases() %>%
+  sum() # Sum the TRUE values to get the count
+
+nrow(bbb_healthy_2year) # 448
+nrow(bbb_unhealthy_2year) # 187
+
+bbb_healthy_2year$age
+
+```
+
+# Split Healthy Group for baseline
+```{r}
+set.seed(18)
+
+### Healthy Training ###
+samp <- sample(c(TRUE, FALSE), nrow(bbb_healthy_2year), replace=TRUE, prob=c(0.5,0.5))
+bbb_train <- bbb_healthy_2year[samp, ]
+bbb_test <- bbb_healthy_2year[!samp, ]
+
+bbb_train %>% select(biospec_blood_hemoglobin_a1:PLR)  %>%
+  complete.cases() %>%
+  sum()
+
+nrow(bbb_train) # 221
+nrow(bbb_test) # 227
+```
+
+# Train Healthy
+```{r}
+
+bbb_markers_sub <- colnames(bbb_train %>% select(biospec_blood_hemoglobin_a1:PLR))
+
+
+kdm_train_bbb_sub <- kdm_calc(bbb_train, biomarkers = bbb_markers_sub)
+
+saveRDS(kdm_train_bbb_sub, paste0(root, "Version5.0_Exported_Data/kdm_train_bbb_sub.rds"))
+```
+
+# Correlation tests between kdm_age and chronological age
+```{r}
+nrow(kdm_train_bbb_sub$data)
+hist(kdm_train_bbb_sub$data$age)
+cor.test(as.numeric(kdm_train_bbb_sub$data$kdm), as.numeric(kdm_train_bbb_sub$data$age))
+
+# Calculate RMSE
+rmse_manual <- sqrt(mean((as.numeric(kdm_train_bbb_sub$data$kdm) - 
+                            as.numeric(kdm_train_bbb_sub$data$age))^2, na.rm = T))
+
+# Calculate MAE
+mae_manual <- mean(abs(as.numeric(kdm_train_bbb_sub$data$kdm) - as.numeric(kdm_train_bbb_sub$data$age)),
+                   na.rm = T)
+
+
+# Print the results
+print(paste("Manual RMSE:", rmse_manual))
+print(paste("Manual MAE:", mae_manual))
+```
+
+
+# Project to test
+## Get Prediction
+```{r}
+kdm_test_bbb_sub_test <- kdm_calc(bbb_test, biomarkers = bbb_markers_sub, fit = kdm_train_bbb_sub$fit, s_ba2 = 
+                       kdm_train_bbb_sub$fit$s_ba2)
+
+kdm_data_bbb_sub_test <- kdm_test_bbb_sub_test$data
+
+nrow(kdm_data_bbb_sub_test)
+range(kdm_data_bbb_sub_test$age)
+
+```
+
+
+## Correlation tests between kdm_age (both genders) and chronological age
+```{r}
+nrow(kdm_data_bbb_sub_test)
+cor.test(as.numeric(kdm_data_bbb_sub_test$kdm), as.numeric(kdm_data_bbb_sub_test$age))
+# Calculate RMSE
+rmse_manual <- sqrt(mean((as.numeric(kdm_data_bbb_sub_test$kdm) - 
+                            as.numeric(kdm_data_bbb_sub_test$age))^2, na.rm = T))
+
+# Calculate MAE
+mae_manual <- mean(abs(as.numeric(kdm_data_bbb_sub_test$kdm) - 
+                         as.numeric(kdm_data_bbb_sub_test$age)),
+                   na.rm = T)
+
+mean(kdm_data_bbb_sub_test$kdm, na.rm = T)
+sd(kdm_data_bbb_sub_test$kdm, na.rm = T)
+
+# Print the results
+print(paste("Manual RMSE:", rmse_manual))
+print(paste("Manual MAE:", mae_manual))
+
+```
+
+# Project trained model onto Unhealthy cohort
+## Get prediction
+```{r}
+kdm_unhealthy_bbb <- kdm_calc(bbb_unhealthy_2year, biomarkers = bbb_markers_sub, 
+                              fit = kdm_train_bbb_sub$fit, s_ba2 = kdm_train_bbb_sub$fit$s_ba2)
+
+kdm_data_unhealthy_bbb <- kdm_unhealthy_bbb$data
+
+nrow(kdm_data_unhealthy_bbb)
+```
+
+## Correlation tests between kdm_age (both genders) and chronological age (Unhealthy)
+```{r}
+nrow(kdm_data_unhealthy_bbb)
+cor.test(as.numeric(kdm_data_unhealthy_bbb$kdm), as.numeric(kdm_data_unhealthy_bbb$age))
+# Calculate RMSE
+rmse_manual <- sqrt(mean((as.numeric(kdm_data_unhealthy_bbb$kdm) - 
+                            as.numeric(kdm_data_unhealthy_bbb$age))^2, na.rm = T))
+
+# Calculate MAE
+mae_manual <- mean(abs(as.numeric(kdm_data_unhealthy_bbb$kdm) - 
+                         as.numeric(kdm_data_unhealthy_bbb$age)),
+                   na.rm = T)
+mean(kdm_data_unhealthy_bbb$kdm, na.rm = T)
+sd(kdm_data_unhealthy_bbb$kdm, na.rm = T)
+
+# Print the results
+print(paste("Manual RMSE:", rmse_manual))
+print(paste("Manual MAE:", mae_manual))
+
+```
+
+
+# Plot kdm_advance
+```{r}
+#plot age vs bioage
+plot_ba(kdm_data_bbb_sub, "kdm_advance", "KDM\nBiological Age")
+ggdensity(kdm_data_bbb_sub$kdm_advance)
+
+hist(kdm_data_bbb_sub$kdm)
+hist(kdm_data_bbb_sub$kdm_advance)
+
+hist(kdm_data_unhealthy$kdm)
+hist(kdm_data_unhealthy$kdm_advance)
+
+```
+
+# Export Data
+```{r}
+# Merge Test and Unhealhty cohort
+kdm_data_bbb_sub_baseline <- rbind(kdm_data_bbb_sub_test, kdm_data_unhealthy_bbb) 
+table(kdm_data_bbb_sub$phys_ment_health)
+
+sd(kdm_data_bbb_sub_baseline$kdm_advance, na.rm = T)
+
+nrow(kdm_data_bbb_sub_baseline)
+
+write.csv(kdm_data_bbb_sub_baseline, paste0(root, "Version5.0_Exported_Data/kdm_data_bbb_sub_baseline.csv"))
+
+```
+
+
+
+
+
+
+
