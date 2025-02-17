@@ -1,0 +1,240 @@
+---
+title: "SEM_Organ_KDM"
+format:
+  html: 
+    theme: cosmo
+    fontsize: 1.1em
+    linestretch: 1.7
+toc: true
+editor: visual
+---
+
+This file runs SEM analyses to see the effect on organ KDM, Bio Age and Brain Age on each other
+
+Input: All DF's
+
+Output: SEM results
+
+# Read in Libraries
+
+```{r}
+#install.packages("flexsurv")
+#devtools::install_github("dayoonkwon/BioAge")
+#| warning: false
+
+root <- "/Users/hansoochang/Drexel/ABCD/"
+
+
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(pcaPP)
+library(stringr)
+library(stats)
+library(misty)
+library(emmeans)
+library(LSD)
+library(ggtext)
+library(patchwork)
+library(tidyverse)
+library(lavaan)
+library(semTools)
+library(semPlot)
+
+
+```
+
+# Read in Data
+
+```{r}
+# Baseline
+cv <- read.csv(paste0(root, "Version5.0_Exported_Data/cv_kdm.csv"))
+of <- read.csv(paste0(root, "Version5.0_Exported_Data/of_kdm.csv"))
+ms <- read.csv(paste0(root, "Version5.0_Exported_Data/ms_kdm.csv"))
+im <- read.csv(paste0(root, "Version5.0_Exported_Data/im_kdm.csv"))
+mb <- read.csv(paste0(root, "Version5.0_Exported_Data/mb_kdm.csv"))
+whole_body <- read.csv(paste0(root, "Version5.0_Exported_Data/kdm_data_bbb_sub.csv"))
+kdm_data_gmv_sub_base <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub.csv"))
+
+# Brainage 2 year
+kdm_data_gmv_sub_2year <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub_2year.csv"))
+
+# Brainage 4 year
+kdm_data_gmv_sub_4year <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub_4year.csv"))
+
+```
+
+# Merge Dataframe with just kdm info
+
+This is all at 2 year
+
+```{r}
+
+# Select the columns of interest and rename them with dataframe names
+cv_selected <- cv %>%
+  select(subjectkey, eventname,  sex, interview_age, kdm, kdm_advance) %>%
+  mutate(
+    kdm_cv = kdm,
+    kdm_advance_cv = kdm_advance
+  ) %>%
+  select(-kdm, -kdm_advance)
+
+of_selected <- of %>%
+  select(subjectkey, eventname, sex, interview_age, kdm, kdm_advance) %>%
+  mutate(
+    kdm_of = kdm,
+    kdm_advance_of = kdm_advance
+  ) %>%
+  select(-kdm, -kdm_advance)
+
+ms_selected <- ms %>%
+  select(subjectkey, eventname, sex, interview_age, kdm, kdm_advance) %>%
+  mutate(
+    kdm_ms = kdm,
+    kdm_advance_ms = kdm_advance
+  ) %>%
+  select(-kdm, -kdm_advance)
+
+im_selected <- im %>%
+  select(subjectkey, eventname, sex, interview_age, kdm, kdm_advance) %>%
+  mutate(
+    kdm_im = kdm,
+    kdm_advance_im = kdm_advance
+  ) %>%
+  select(-kdm, -kdm_advance)
+
+mb_selected <- mb %>%
+  select(subjectkey, eventname, sex, interview_age, kdm, kdm_advance) %>%
+  mutate(
+    kdm_mb = kdm,
+    kdm_advance_mb = kdm_advance
+  ) %>%
+  select(-kdm, -kdm_advance)
+
+whole_body_selected <- whole_body %>%
+  select(subjectkey, eventname, sex, interview_age, kdm, kdm_advance) %>%
+  mutate(
+    kdm_bioage = kdm,
+    kdm_advance_bioage = kdm_advance
+  ) %>%
+  select(-kdm, -kdm_advance)
+
+kdm_data_gmv_sub_2year$subjectkey <- kdm_data_gmv_sub_2year$src_subject_id
+
+kdm_data_gmv_sub_2year_selected <- kdm_data_gmv_sub_2year %>%
+  select(subjectkey, eventname, sex, interview_age, kdm, kdm_advance) %>%
+  mutate(
+    kdm_gmv = kdm,
+    kdm_advance_gmv = kdm_advance
+  ) %>%
+  select(-kdm, -kdm_advance)
+
+kdm_data_gmv_sub_4year$subjectkey <- kdm_data_gmv_sub_4year$src_subject_id
+
+kdm_data_gmv_sub_4year_selected <- kdm_data_gmv_sub_4year %>%
+  select(subjectkey, eventname, sex, interview_age, kdm, kdm_advance) %>%
+  mutate(
+    kdm_gmv = kdm,
+    kdm_advance_gmv = kdm_advance
+  ) %>%
+  select(-kdm, -kdm_advance)
+
+
+
+# Merge the dataframes by subjectkey and eventname
+all_kdm_sem_base <- cv_selected %>%
+  full_join(of_selected, by = c("subjectkey", "eventname", "sex", "interview_age")) %>%
+  full_join(ms_selected, by = c("subjectkey", "eventname", "sex", "interview_age")) %>%
+  full_join(im_selected, by = c("subjectkey", "eventname", "sex", "interview_age")) %>%
+  full_join(mb_selected, by = c("subjectkey", "eventname", "sex", "interview_age")) %>%
+  full_join(whole_body_selected, by = c("subjectkey", "eventname", "sex", "interview_age")) %>%
+  full_join(kdm_data_gmv_sub_2year_selected, by = c("subjectkey"))
+
+all_kdm_sem_gmv_4 <- cv_selected %>%
+  full_join(of_selected, by = c("subjectkey", "eventname", "sex", "interview_age")) %>%
+  full_join(ms_selected, by = c("subjectkey", "eventname", "sex", "interview_age")) %>%
+  full_join(im_selected, by = c("subjectkey", "eventname", "sex", "interview_age")) %>%
+  full_join(mb_selected, by = c("subjectkey", "eventname", "sex", "interview_age")) %>%
+  full_join(whole_body_selected, by = c("subjectkey", "eventname", "sex", "interview_age")) %>%
+  full_join(kdm_data_gmv_sub_4year_selected, by = c("subjectkey"))
+
+write.csv(all_kdm_sem_base, paste0(root, "Version5.0_Exported_Data/all_kdm_sem_base.csv"))
+write.csv(all_kdm_sem_gmv_4, paste0(root, "Version5.0_Exported_Data/all_kdm_sem_gmv_4.csv"))
+
+
+```
+
+# Fit SEM Model
+
+## Baseline
+
+```{r}
+
+model <- '
+  # Effect of different biological systems on kdm_advance_bioage
+  kdm_advance_bioage ~ kdm_advance_cv + kdm_advance_of + kdm_advance_ms + kdm_advance_im + kdm_advance_mb
+
+  # Effect of kdm_advance_bioage on kdm_advance_brainage
+  kdm_advance_brainage ~ kdm_advance_bioage + sex.x + interview_age.x
+'
+
+
+
+# Fit the SEM model
+fit <- sem(model, data = all_kdm_sem_base, estimator = "MLR")
+
+summary(fit, standardize = TRUE)
+
+# parameterEstimates(fit, standardized = TRUE)
+
+```
+
+```{r}
+semPaths(fit, 
+         whatLabels = "std", 
+         layout = "tree", 
+         style = "lisrel", 
+         curveAdjacent = TRUE,
+         node.label.cex = 10,      # Increase this further
+         edge.label.cex = 1.15)   
+
+
+
+```
+
+## 4 Year GMV
+
+```{r}
+
+model <- '
+  # Effect of different biological systems on kdm_advance_bioage
+  kdm_advance_bioage ~ kdm_advance_cv + kdm_advance_of + kdm_advance_ms + kdm_advance_im + kdm_advance_mb 
+  
+  # Effect of kdm_advance_bioage on kdm_advance_brainage
+  kdm_advance_brainage ~ kdm_advance_bioage + sex.x + interview_age.x
+'
+
+
+# Fit the SEM model
+fit <- sem(model, data = all_kdm_sem_gmv_4)
+
+summary(fit, standardize = TRUE)
+
+parameterEstimates(fit, standardized = TRUE)
+
+```
+
+```{r}
+semPaths(fit, 
+         whatLabels = "std", 
+         layout = "tree", 
+         style = "lisrel", 
+         curveAdjacent = TRUE,
+         node.label.cex = 10,      # Increase this further
+         edge.label.cex = 1.15)  
+
+```

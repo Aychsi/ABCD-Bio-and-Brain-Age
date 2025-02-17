@@ -1,0 +1,274 @@
+---
+title: "MAE_BBB_Organ_Comp_Graphs"
+format:
+  html: 
+    theme: cosmo
+    fontsize: 1.1em
+    linestretch: 1.7
+toc: true
+editor: visual
+
+---
+
+This file makes barplots to compare the MAE
+
+Input: All DF's
+
+Output: Barplot Comparing MAE's
+
+# Read in Libraries
+```{r}
+#install.packages("flexsurv")
+#devtools::install_github("dayoonkwon/BioAge")
+#| warning: false
+
+root <- "/Users/hansoochang/Drexel/ABCD/"
+
+
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(pcaPP)
+library(stringr)
+library(stats)
+library(misty)
+library(emmeans)
+library(LSD)
+library(ggtext)
+library(patchwork)
+library(tidyverse)
+
+```
+
+# Read in Files
+```{r}
+# Baseline
+cv <- read.csv(paste0(root, "Version5.0_Exported_Data/cv_kdm.csv"))
+of <- read.csv(paste0(root, "Version5.0_Exported_Data/of_kdm.csv"))
+ms <- read.csv(paste0(root, "Version5.0_Exported_Data/ms_kdm.csv"))
+im <- read.csv(paste0(root, "Version5.0_Exported_Data/im_kdm.csv"))
+mb <- read.csv(paste0(root, "Version5.0_Exported_Data/mb_kdm.csv"))
+whole_body <- read.csv(paste0(root, "Version5.0_Exported_Data/kdm_data_bbb_sub.csv"))
+kdm_data_gmv_sub_base <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub.csv"))
+
+
+# 2nd Time Points
+cv_3_data <- read.csv(paste0(root, "Version5.0_Exported_Data/cv_3.csv"))
+of_3_data <- read.csv(paste0(root, "Version5.0_Exported_Data/of_3.csv"))
+ms_3_data <- read.csv(paste0(root, "Version5.0_Exported_Data/ms_3.csv"))
+im_3_data <- read.csv(paste0(root, "Version5.0_Exported_Data/im_3.csv"))
+mb_3_data <- read.csv(paste0(root, "Version5.0_Exported_Data/mb_3.csv"))
+kdm_data_bbb_3 <- read.csv(paste0(root, "summary_data/kdm_data_bbb_all.csv")) %>% 
+  filter(eventname == "3_year_follow_up_y_arm_1")
+kdm_data_gmv_sub_2year <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub_2year.csv"))
+
+
+# 3rd time points
+cv_4_data <- read.csv(paste0(root, "Version5.0_Exported_Data/cv_4.csv"))
+of_4_data <- read.csv(paste0(root, "Version5.0_Exported_Data/of_4.csv"))
+ms_4_data <- read.csv(paste0(root, "Version5.0_Exported_Data/ms_4.csv"))
+im_4_data <- read.csv(paste0(root, "Version5.0_Exported_Data/im_4.csv"))
+mb_4_data <- read.csv(paste0(root, "Version5.0_Exported_Data/mb_4.csv"))
+kdm_data_bbb_4 <- read.csv(paste0(root, "summary_data/kdm_data_bbb_all.csv")) %>% 
+  filter(eventname == "4_year_follow_up_y_arm_1")
+kdm_data_gmv_sub_4year <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub_4year.csv"))
+
+```
+
+# Function to calculate mae and correlation of list of dataframes
+```{r}
+
+calculate_mae_and_correlation <- function(dataframes) {
+  results <- list()
+  
+  for (i in seq_along(dataframes)) {
+    dataframe <- dataframes[[i]]
+
+    # Get only healthy participants 
+    dataframe <- dataframe %>% filter(phys_ment_health == 0)
+    
+    # Calculate MAE
+    mae_value <- Metrics::mae(as.numeric(dataframe$kdm), as.numeric(dataframe$age))
+    
+    # Calculate correlation (r) and p-value
+    correlation_result <- cor.test(as.numeric(dataframe$kdm), as.numeric(dataframe$age))
+    r_value <- correlation_result$estimate
+    p_value <- correlation_result$p.value
+    
+    # Create a dataframe with the results
+    result_df <- data.frame(MAE = mae_value, R_Value = r_value, P_Value = p_value)
+
+    # Store the result in the list
+    results[[i]] <- result_df
+  }
+  
+  # Combine the results into a single dataframe
+  combined_results <- do.call(rbind, results)
+  
+  return(combined_results)
+}
+
+```
+
+
+# Calculate MAE's of Healthy at Baseline
+```{r}
+#| warning: false
+
+dataframes_list_base <- list(cv, of, ms, im, mb, whole_body, kdm_data_gmv_sub_base)
+mae_r_results_base <- calculate_mae_and_correlation(dataframes_list_base)
+
+dataframes_list_string <- list("Cardiovascular", "Organ Function", "Muskuloskeletal", 
+                               "Immune", "Metabolic", "Biological Age", "Brain Age")
+
+mae_r_df_base <- data.frame(Name = unlist(dataframes_list_string), MAE = mae_r_results_base$MAE, R_Value = 
+             mae_r_results_base$R_Value, P_Value = mae_r_results_base$P_Value) 
+mae_r_df_base
+```
+
+# Calculate MAE's of Healthy at 2nd Time Point
+```{r}
+#| warning: false
+
+dataframes_list_2 <- list(cv_3_data, of_3_data, ms_3_data, im_3_data, mb_3_data, 
+                             kdm_data_bbb_3, kdm_data_gmv_sub_2year)
+mae_r_results_2 <- calculate_mae_and_correlation(dataframes_list_2)
+
+dataframes_list_string <- list("Cardiovascular", "Organ Function", "Muskuloskeletal", 
+                               "Immune", "Metabolic", "Biological Age", "Brain Age")
+
+mae_r_df_2 <- data.frame(Name = unlist(dataframes_list_string), MAE = mae_r_results_2$MAE, R_Value = 
+             mae_r_results_2$R_Value, P_Value = mae_r_results_2$P_Value) 
+mae_r_df_2
+```
+
+
+# Calculate MAE's of Healthy at 3nd Time Point
+```{r}
+#| warning: false
+
+dataframes_list_3 <- list(cv_4_data, of_4_data, ms_4_data, im_4_data, mb_4_data, 
+                             kdm_data_bbb_4, kdm_data_gmv_sub_4year)
+mae_r_results_3 <- calculate_mae_and_correlation(dataframes_list_3)
+
+dataframes_list_string <- list("Cardiovascular", "Organ Function", "Muskuloskeletal", 
+                               "Immune", "Metabolic", "Biological Age", "Brain Age")
+
+mae_r_df_3 <- data.frame(Name = unlist(dataframes_list_string), MAE = mae_r_results_3$MAE, R_Value = 
+             mae_r_results_3$R_Value, P_Value = mae_r_results_3$P_Value) 
+mae_r_df_3
+```
+
+
+# Render Barplot
+## Baseline
+```{r}
+#| warning: false
+
+# Reshape the data into a tidy format
+results_df_tidy <- mae_r_df %>%
+  pivot_longer(cols = c(MAE, R_Value), names_to = "Metric", values_to = "Value")
+
+# Define lighter shades of blue and green
+light_blue <- "#87CEEB"
+light_green <- "#98FB98"
+
+# Create a barplot with facets and rotated x-axis labels
+barplot <- ggplot(data = results_df_tidy, aes(x = Name, y = Value, fill = Metric)) +
+  geom_bar(stat = "identity") +
+  labs(title = "MAE and R Value by KDM",
+       x = "KDM Name",
+       y = "Value") +
+  facet_wrap(~ Metric, scales = "free_y", ncol = 1) +
+  scale_fill_manual(values = c(light_blue, light_green)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12, face = "bold"), 
+        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title.x = element_text(size = 14, face = "bold"),  # Adjust x-axis label size and boldness
+        axis.title.y = element_text(size = 14, face = "bold"))  # Adjust y-axis label size and boldness
+
+# Print the final plot
+ggsave("MAE_R_Barplot_base.jpg", plot = barplot, width = 10, height = 10, units = "in")
+
+```
+
+
+## 2nd Time point
+```{r}
+#| warning: false
+
+# Reshape the data into a tidy format
+results_df_tidy_2 <- mae_r_df_2 %>%
+  pivot_longer(cols = c(MAE, R_Value), names_to = "Metric", values_to = "Value")
+
+# Define lighter shades of blue and green
+light_blue <- "#87CEEB"
+light_green <- "#98FB98"
+
+# Create a barplot with facets and rotated x-axis labels
+barplot <- ggplot(data = results_df_tidy_2, aes(x = Name, y = Value, fill = Metric)) +
+  geom_bar(stat = "identity") +
+  labs(title = "MAE and R Value by KDM",
+       x = "KDM Name",
+       y = "Value") +
+  facet_wrap(~ Metric, scales = "free_y", ncol = 1) +
+  scale_fill_manual(values = c(light_blue, light_green)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12, face = "bold"), 
+        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title.x = element_text(size = 14, face = "bold"),  # Adjust x-axis label size and boldness
+        axis.title.y = element_text(size = 14, face = "bold"))  # Adjust y-axis label size and boldness
+
+# Print the final plot
+ggsave("MAE_R_Barplot_2.jpg", plot = barplot, width = 10, height = 10, units = "in")
+
+```
+
+
+## 3rd Time point
+```{r}
+#| warning: false
+
+# Reshape the data into a tidy format
+results_df_tidy_3 <- mae_r_df_3 %>%
+  pivot_longer(cols = c(MAE, R_Value), names_to = "Metric", values_to = "Value")
+
+# Define lighter shades of blue and green
+light_blue <- "#87CEEB"
+light_green <- "#98FB98"
+
+# Create a barplot with facets and rotated x-axis labels
+barplot <- ggplot(data = results_df_tidy_3, aes(x = Name, y = Value, fill = Metric)) +
+  geom_bar(stat = "identity") +
+  labs(title = "MAE and R Value by KDM",
+       x = "KDM Name",
+       y = "Value") +
+  facet_wrap(~ Metric, scales = "free_y", ncol = 1) +
+  scale_fill_manual(values = c(light_blue, light_green)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12, face = "bold"), 
+        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title.x = element_text(size = 14, face = "bold"),  # Adjust x-axis label size and boldness
+        axis.title.y = element_text(size = 14, face = "bold"))  # Adjust y-axis label size and boldness
+
+# Print the final plot
+ggsave("MAE_R_Barplot_3.jpg", plot = barplot, width = 10, height = 10, units = "in")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

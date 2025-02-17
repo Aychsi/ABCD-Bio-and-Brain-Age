@@ -1,0 +1,130 @@
+---
+title: "Heat_Scatter_Plots"
+format:
+  html: 
+    theme: cosmo
+    fontsize: 1.1em
+    linestretch: 1.7
+toc: true
+editor: visual
+---
+
+This file makes Heat Scatter plots
+
+Input: All DF's
+
+Output: Scatterplots
+
+# Read in Libraries
+
+```{r}
+#install.packages("flexsurv")
+#devtools::install_github("dayoonkwon/BioAge")
+#| warning: false
+
+root <- "/Users/hansoochang/Drexel/ABCD/"
+
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(pcaPP)
+library(stringr)
+library(stats)
+library(misty)
+library(emmeans)
+library(LSD)
+library(ggtext)
+library(patchwork)
+
+```
+
+# Read in Dataframes
+
+```{r}
+#| warning: false
+
+# Cardiovascular 
+cv <- read.csv(paste0(root, "Version5.0_Exported_Data/cv_kdm.csv"))
+
+# Organ Functioning
+of <- read.csv(paste0(root, "Version5.0_Exported_Data/of_kdm.csv"))
+
+# Muskuloskeletal
+ms <- read.csv(paste0(root, "Version5.0_Exported_Data/ms_kdm.csv"))
+
+# Immune Function
+im <- read.csv(paste0(root, "Version5.0_Exported_Data/im_kdm.csv"))
+
+# Metabolic
+mb <- read.csv(paste0(root, "Version5.0_Exported_Data/mb_kdm.csv"))
+
+# BBB
+bbb <- read.csv(paste0(root, "summary_data/kdm_data_bbb_all.csv"))
+
+# GMV
+kdm_data_gmv_sub_base <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub.csv"))
+kdm_data_gmv_sub_2year <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub_2year.csv"))
+kdm_data_gmv_sub_4year <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub_4year.csv"))
+kdm_data_gmv_all <- rbind(rbind(kdm_data_gmv_sub_base, kdm_data_gmv_sub_2year), kdm_data_gmv_sub_4year)
+
+kdm_data_gmv_all$subjectkey <- kdm_data_gmv_all$src_subject_id
+kdm_data_gmv_all <- kdm_data_gmv_all %>%
+  mutate(sex = ifelse(sex == 1, "M", "F"))
+```
+
+# Create a scatterplot for all KDM methods
+
+```{r}
+#| warning: false
+
+# Create a list of dataframes and corresponding titles
+dataframes_list <- list(
+  cv1 = list(data = cv, title = "Cardiovascular"),
+  cv2 = list(data = of, title = "Organ Functioning"),
+  cv3 = list(data = ms, title = "Muskuloskeletal"),
+  cv4 = list(data = im, title = "Immune Function"),
+  cv5 = list(data = mb, title = "Metabolic"),
+  cv6 = list(data = bbb %>% filter(eventname == "2_year_follow_up_y_arm_1"), 
+             title = "Biological Age"),
+  cv7 = list(data = kdm_data_gmv_sub_base, title = "Brain Age")
+)
+
+
+
+# Function to calculate sample size
+calculate_sample_size <- function(df) {
+  nrow(df)
+}
+
+# Create a list of ggplots
+plots_list <- lapply(dataframes_list, function(df_info) {
+  # Calculate sample size
+  sample_size <- calculate_sample_size(df_info$data)
+  
+  ggplot(data = df_info$data, aes(x = age, y = kdm)) +
+    geom_bin2d(bins = 20) +  # Adjust the number of bins as needed
+    scale_fill_viridis_c() +  # Choose a color scale (adjust as needed)
+    labs(title = df_info$title,
+         subtitle = paste("Sample Size:", sample_size),  # Add sample size to subtitle
+         x = "Chronological Age",
+         y = "KDM") +
+    theme(plot.title = element_text(hjust = 0.5))  # Center the title
+})
+
+# Define plot sizes
+plot_sizes <- rep(10, length(plots_list))  # Adjust the size as needed
+
+# Combine ggplots into one frame using patchwork with specified sizes
+final_plot <- wrap_plots(plots_list, ncol = 3) +
+  plot_layout(widths = plot_sizes)
+
+# Print the final plot
+ggsave("Heat_Scatter.jpg", plot = final_plot, width = 10, height = 10, units = "in")
+
+
+
+```

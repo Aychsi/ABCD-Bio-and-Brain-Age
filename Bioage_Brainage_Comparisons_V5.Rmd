@@ -1,0 +1,2007 @@
+---
+title: "Bioage_Brainage_Comparisons_V5"
+output: html_document
+date: "2023-09-06"
+---
+
+This file compares Biological Age and Brainage Visually
+
+Input:
++ kdm_data_bbb_sub.csv (Projected 2 year KDM)
++ kdm_train_bbb_sub (Trained Model Fit)
++ bbb_sub_all.csv (all BBB data)
+
+Output:
++ gmv_bbb_all.csv
+
+
+# Libraries 
+```{r, echo = FALSE, error = FALSE, message = FALSE, warning = FALSE, results = 'hide'}
+library(BioAge)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(magrittr)
+library(cplm)
+library(parameters)
+library(dplyr)
+library(lme4)
+library(performance)
+library(ROSE)
+library(tidyr)
+library(ggpmisc)
+library(stringr)
+library(rmcorr)
+```
+
+
+# Read in Data
+```{r}
+# GMV
+# kdm_data_gmv_sub_base <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub.csv"))
+# kdm_data_gmv_sub_2year <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub_2year.csv"))
+# kdm_data_gmv_sub_4year <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub_4year.csv"))
+# kdm_data_gmv_all <- rbind(rbind(kdm_data_gmv_sub_base, kdm_data_gmv_sub_2year), kdm_data_gmv_sub_4year)
+
+kdm_data_gmv_sub_long <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub_long.csv"))
+kdm_data_gmv_sub_long_comp <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub_long_comp.csv"))
+kdm_data_gmv_all <- kdm_data_gmv_sub_long
+
+kdm_data_gmv_all %>% 
+  filter(eventname == "baseline_year_1_arm_1") %>%
+  arrange(kdm) %>%
+  slice(-c(1:3, (n()-2):n())) %>%
+  summarise(
+    mean_kdm = mean(kdm, na.rm = TRUE),
+    sd_kdm = sd(kdm, na.rm = TRUE),
+    max_kdm = max(kdm, na.rm = TRUE),
+    min_kdm = min(kdm, na.rm = TRUE)
+  )
+
+
+# rmcorr(participant = src_subject_id,
+#        measure1 = age,
+#        measure2 = kdm,
+#        dataset = kdm_data_gmv_sub_long)
+
+# For Zac #
+#write.csv(kdm_data_gmv_all %>% select(src_subject_id, eventname, kdm, kdm_advance), paste0(root, "Version5.0_Exported_Data/forZac.csv"))
+
+# Group the data by ParticipantID and count the unique TimePoints
+# result <- kdm_data_gmv_all %>%
+#   group_by(src_subject_id) %>%
+#   summarize(NumTimePoints = n_distinct(eventname))
+# 
+# result
+
+# Filter for participants with all three time points
+# participants_with_all_timepoints <- result %>%
+#   filter(NumTimePoints == 3)
+# 
+# participants_with_all_timepoints
+
+
+### BBB
+kdm_data_bbb_sub_long <- read.csv(paste0(root, "summary_data/kdm_data_bbb_sub_long.csv"))
+
+# rmcorr(participant = src_subject_id,
+#        measure1 = age,
+#        measure2 = kdm,
+#        dataset = kdm_data_bbb_sub_long)
+
+kdm_data_bbb_sub_long %>% 
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  summarise(
+    mean_age = mean(age, na.rm = T),
+    sd_age = sd(age, na.rm =T)
+  )
+
+kdm_data_bbb_sub_long %>% 
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  arrange(kdm) %>%
+  slice(-c(1:3, (n()-2):n())) %>%
+  summarise(
+    mean_kdm = mean(kdm, na.rm = TRUE),
+    sd_kdm = sd(kdm, na.rm = TRUE),
+    max_kdm = max(kdm, na.rm = TRUE),
+    min_kdm = min(kdm, na.rm = TRUE)
+  )
+
+### Organ Age
+sub_bbb_all_2 <- read.csv(paste0(root, "Version5.0_Exported_Data/sub_bbb_all_2.csv"))
+sub_bbb_all_3 <- read.csv(paste0(root, "Version5.0_Exported_Data/sub_bbb_all_3.csv"))
+sub_bbb_all_4 <- read.csv(paste0(root, "Version5.0_Exported_Data/sub_bbb_all_4.csv"))
+sub_bbb_all_organ <- read.csv(paste0(root, "Version5.0_Exported_Data/sub_bbb_all_organ.csv"))
+
+```
+
+
+# Prepare and Merge Data
+```{r}
+kdm_data_gmv_all_forComp <- kdm_data_gmv_all %>% 
+  select(src_subject_id, eventname, phys_ment_health, sex, age, kdm, kdm_advance, rel_family_id,
+         site_id_l, mri_info_manufacturer)
+
+
+kdm_data_gmv_all_forComp$sex <- ifelse(kdm_data_gmv_all_forComp$sex == 1, "M", 
+                                       ifelse(kdm_data_gmv_all_forComp$sex == 2, "F", 
+                                              kdm_data_gmv_all_forComp$sex))
+
+
+# Use dplyr to rename the selected columns
+kdm_data_gmv_all_forComp <- kdm_data_gmv_all_forComp %>%
+  rename_with(
+    ~paste0(.x, "_gmv"),  # Add the new prefix to each column name
+    .cols = all_of("age"):all_of("kdm_advance")  # Select the range of columns
+  )
+
+
+kdm_data_bbb_all_forComp <- kdm_data_bbb_sub_long %>% 
+  select(src_subject_id, eventname, phys_ment_health, sex, age, kdm, kdm_advance,
+         rel_family_id, site_id_l)
+
+
+
+# Use dplyr to rename the selected columns
+kdm_data_bbb_all_forComp <- kdm_data_bbb_all_forComp %>%
+  rename_with(
+    ~paste0(.x, "_bbb"),  # Add the new prefix to each column name
+    .cols = all_of("age"):all_of("kdm_advance")  # Select the range of columns
+  )
+
+
+# All participants and times merged
+gmv_bbb_all <- merge(kdm_data_gmv_all_forComp, 
+      kdm_data_bbb_all_forComp, 
+      by = c("src_subject_id", "eventname"), all = T)
+
+gmv_bbb_all <- gmv_bbb_all %>%
+  mutate(sex = coalesce(sex.x, sex.y)) %>%
+  select(-sex.x, -sex.y)
+
+gmv_bbb_all <- gmv_bbb_all %>%
+  mutate(rel_family_id = coalesce(rel_family_id.x, rel_family_id.y)) %>%
+  select(-rel_family_id.x, -rel_family_id.y)
+
+gmv_bbb_all <- gmv_bbb_all %>%
+  mutate(site_id_l = coalesce(site_id_l.x, site_id_l.y)) %>%
+  select(-site_id_l.x, -site_id_l.y)
+
+
+# All participants with both gmv and bbb available
+gmv_bbb_common <- merge(kdm_data_gmv_all_forComp, 
+      kdm_data_bbb_all_forComp, 
+      by = c("src_subject_id", "eventname"))
+
+gmv_bbb_common <- gmv_bbb_common %>%
+  mutate(sex = coalesce(sex.x, sex.y)) %>%
+  select(-sex.x, -sex.y)
+
+
+gmv_bbb_common %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  summarize(
+    mean_age_gmv = mean(age_gmv, na.rm = TRUE),  # Calculate mean of age_gmv, excluding NA values
+    mean_age_bbb = mean(age_bbb, na.rm = TRUE)   # Calculate mean of age_bbb, excluding NA values
+  )
+
+```
+
+# KDM Mean, SD, CI By Age
+```{r}
+# Round Ages so that I can get Mean and SD
+gmv_bbb_all <- gmv_bbb_all %>% 
+  mutate(
+    age_gmv_round = if_else(round(age_gmv) == 16, 15, round(age_gmv)),
+    age_bbb_round = if_else(round(age_bbb) == 16, 15, round(age_bbb))
+  )
+
+
+mean_sd_CI_gmv_M <- gmv_bbb_all %>%
+  filter(sex == "M") %>%
+  group_by(age_gmv_round) %>%
+  summarise(
+    N = sum(!is.na(kdm_gmv)), # Sample size for non-NA kdm_gmv values
+    Mean_KDM = mean(kdm_gmv, na.rm = TRUE),
+    SD_KDM = sd(kdm_gmv, na.rm = TRUE),
+    Range_KDM = max(kdm_gmv, na.rm = TRUE) - min(kdm_gmv, na.rm = TRUE),
+    CI_Lower_KDM = Mean_KDM - qt(0.975, df = N - 1) * (SD_KDM / sqrt(N)),
+    CI_Upper_KDM = Mean_KDM + qt(0.975, df = N - 1) * (SD_KDM / sqrt(N)),
+    Mean_KDM_advance = mean(kdm_advance_gmv, na.rm = TRUE),
+    SD_KDM_advance = sd(kdm_advance_gmv, na.rm = TRUE),
+    Range_KDM_advance = max(kdm_advance_gmv, na.rm = TRUE) - min(kdm_advance_gmv, na.rm = TRUE),
+    CI_Lower_KDM_advance = Mean_KDM_advance - qt(0.975, df = N - 1) * (SD_KDM_advance / sqrt(N)),
+    CI_Upper_KDM_advance = Mean_KDM_advance + qt(0.975, df = N - 1) * (SD_KDM_advance / sqrt(N))
+  )
+  
+mean_sd_CI_gmv_F <- gmv_bbb_all %>%
+  filter(sex == "F") %>%
+  group_by(age_gmv_round) %>%
+  summarise(
+    N = sum(!is.na(kdm_gmv)), # Sample size for non-NA kdm_gmv values
+    Mean_KDM = mean(kdm_gmv, na.rm = TRUE),
+    SD_KDM = sd(kdm_gmv, na.rm = TRUE),
+    Range_KDM = max(kdm_gmv, na.rm = TRUE) - min(kdm_gmv, na.rm = TRUE),
+    CI_Lower_KDM = Mean_KDM - qt(0.975, df = N - 1) * (SD_KDM / sqrt(N)),
+    CI_Upper_KDM = Mean_KDM + qt(0.975, df = N - 1) * (SD_KDM / sqrt(N)),
+    Mean_KDM_advance = mean(kdm_advance_gmv, na.rm = TRUE),
+    SD_KDM_advance = sd(kdm_advance_gmv, na.rm = TRUE),
+    Range_KDM_advance = max(kdm_advance_gmv, na.rm = TRUE) - min(kdm_advance_gmv, na.rm = TRUE),
+    CI_Lower_KDM_advance = Mean_KDM_advance - qt(0.975, df = N - 1) * (SD_KDM_advance / sqrt(N)),
+    CI_Upper_KDM_advance = Mean_KDM_advance + qt(0.975, df = N - 1) * (SD_KDM_advance / sqrt(N))
+  )
+
+mean_sd_CI_gmv_M
+mean_sd_CI_gmv_F
+ 
+
+mean_sd_CI_bbb <- gmv_bbb_all %>%
+  group_by(age_bbb_round) %>%
+  summarise(
+    N = sum(!is.na(kdm_bbb)), # Sample size for non-NA kdm_bbb values
+    Mean_KDM = mean(kdm_bbb, na.rm = TRUE),
+    SD_KDM = sd(kdm_bbb, na.rm = TRUE),
+    Range_KDM = max(kdm_bbb, na.rm = TRUE) - min(kdm_bbb, na.rm = TRUE),
+    CI_Lower_KDM = Mean_KDM - qt(0.975, df = N - 1) * (SD_KDM / sqrt(N)),
+    CI_Upper_KDM = Mean_KDM + qt(0.975, df = N - 1) * (SD_KDM / sqrt(N)),
+    Mean_KDM_advance = mean(kdm_advance_bbb, na.rm = TRUE),
+    SD_KDM_advance = sd(kdm_advance_bbb, na.rm = TRUE),
+    Range_KDM_advance = max(kdm_advance_bbb, na.rm = TRUE) - min(kdm_advance_bbb, na.rm = TRUE),
+    CI_Lower_KDM_advance = Mean_KDM_advance - qt(0.975, df = N - 1) * (SD_KDM_advance / sqrt(N)),
+    CI_Upper_KDM_advance = Mean_KDM_advance + qt(0.975, df = N - 1) * (SD_KDM_advance / sqrt(N))
+  )
+
+mean_sd_CI_bbb
+
+```
+
+
+# Overall Trajectory Plots
+## Continuous
+### GMV
+```{r}
+# KDM Advance
+upper_limit <- mean(gmv_bbb_all$kdm_advance_gmv, na.rm = TRUE) + 1.96 * 
+  sd(gmv_bbb_all$kdm_advance_gmv, na.rm = TRUE)
+
+lower_limit <- mean(gmv_bbb_all$kdm_advance_gmv, na.rm = TRUE) - 1.96 * 
+  sd(gmv_bbb_all$kdm_advance_gmv, na.rm = TRUE)
+
+# Bland-Altman Plot
+ggplot(gmv_bbb_all %>% filter(!is.na(sex)), aes(x = age_gmv, y = kdm_advance_gmv, color = sex)) +
+  geom_point() +
+  geom_hline(yintercept = mean(gmv_bbb_all$kdm_advance_gmv, na.rm = TRUE), 
+             color = "blue", linetype = "dashed") +
+  geom_hline(yintercept = upper_limit, color = "red", linetype = "dashed") +
+  geom_hline(yintercept = lower_limit, color = "red", linetype = "dashed") +
+  labs(title = "Bland-Altman Plot for KDM Advance by Sex",
+       x = "Chronological Age",
+       y = "KDM Advance",
+       color = "Sex") +
+  theme_minimal()
+
+
+
+# Fit linear model
+lm_model <- lm(kdm_gmv ~ age_gmv, data = gmv_bbb_all)
+
+# Predictions for the regression line
+gmv_bbb_all$predicted_kdm <- predict(lm_model, gmv_bbb_all)
+
+# Calculate residuals
+gmv_bbb_all$residuals <- gmv_bbb_all$kdm_gmv - gmv_bbb_all$predicted_kdm
+
+# Standard deviation of residuals
+sd_residuals <- sd(gmv_bbb_all$residuals, na.rm = TRUE)
+
+# Add and subtract 1.96 * SD of residuals to/from the predicted values for limits
+gmv_bbb_all$upper_limit_kdm <- gmv_bbb_all$predicted_kdm + 1.96 * sd_residuals
+gmv_bbb_all$lower_limit_kdm <- gmv_bbb_all$predicted_kdm - 1.96 * sd_residuals
+
+# Bland-Altman Plot with Regression Line and Limits
+ggplot(gmv_bbb_all %>% filter(!is.na(sex)), aes(x = age_gmv)) +
+  geom_point(aes(y = kdm_gmv, color = sex)) +
+  geom_line(aes(y = predicted_kdm), color = "blue") +  # Regression line
+  geom_ribbon(aes(ymin = lower_limit_kdm, ymax = upper_limit_kdm), alpha = 0.4, fill = "red") +
+  labs(title = "Bland-Altman Plot with Regression Line for KDM by Sex",
+       x = "Chronological Age",
+       y = "KDM",
+       color = "Sex") +
+  theme_minimal()
+
+
+```
+
+### BBB
+```{r}
+# KDM Advance
+upper_limit <- mean(gmv_bbb_all$kdm_advance_bbb, na.rm = TRUE) + 1.96 * 
+  sd(gmv_bbb_all$kdm_advance_bbb, na.rm = TRUE)
+
+lower_limit <- mean(gmv_bbb_all$kdm_advance_bbb, na.rm = TRUE) - 1.96 * 
+  sd(gmv_bbb_all$kdm_advance_bbb, na.rm = TRUE)
+
+# Bland-Altman Plot
+ggplot(gmv_bbb_all %>% filter(!is.na(sex)), aes(x = age_bbb, y = kdm_advance_bbb, color = sex)) +
+  geom_point() +
+  geom_hline(yintercept = mean(gmv_bbb_all$kdm_advance_bbb, na.rm = TRUE), 
+             color = "blue", linetype = "dashed") +
+  geom_hline(yintercept = upper_limit, color = "red", linetype = "dashed") +
+  geom_hline(yintercept = lower_limit, color = "red", linetype = "dashed") +
+  labs(title = "Bland-Altman Plot for KDM Advance by Sex",
+       x = "Chronological Age",
+       y = "KDM Advance",
+       color = "Sex") +
+  theme_minimal()
+
+
+
+# Fit linear model
+lm_model <- lm(kdm_bbb ~ age_bbb, data = gmv_bbb_all)
+
+# Predictions for the regression line
+gmv_bbb_all$predicted_kdm <- predict(lm_model, gmv_bbb_all)
+
+# Calculate residuals
+gmv_bbb_all$residuals <- gmv_bbb_all$kdm_bbb - gmv_bbb_all$predicted_kdm
+
+# Standard deviation of residuals
+sd_residuals <- sd(gmv_bbb_all$residuals, na.rm = TRUE)
+
+# Add and subtract 1.96 * SD of residuals to/from the predicted values for limits
+gmv_bbb_all$upper_limit_kdm <- gmv_bbb_all$predicted_kdm + 1.96 * sd_residuals
+gmv_bbb_all$lower_limit_kdm <- gmv_bbb_all$predicted_kdm - 1.96 * sd_residuals
+
+# Bland-Altman Plot with Regression Line and Limits
+ggplot(gmv_bbb_all %>% filter(!is.na(sex)), aes(x = age_bbb)) +
+  geom_point(aes(y = kdm_bbb, color = sex)) +
+  geom_line(aes(y = predicted_kdm), color = "blue") +  # Regression line
+  geom_ribbon(aes(ymin = lower_limit_kdm, ymax = upper_limit_kdm), alpha = 0.4, fill = "red") +
+  labs(title = "Bland-Altman Plot with Regression Line for KDM by Sex",
+       x = "Chronological Age",
+       y = "KDM",
+       color = "Sex") +
+  theme_minimal()
+
+
+```
+
+
+### Organ Age
+```{r}
+sub_bbb_all_organ <- read.csv(paste0(root, "Version5.0_Exported_Data/sub_bbb_all_organ.csv"))
+sub_bbb_all_organ <- merge(sub_bbb_all_organ, 
+                           gmv_bbb_all %>% select(src_subject_id, sex),
+                           by = "src_subject_id")
+
+kdm_columns <- grep("kdm_advance_", names(sub_bbb_all_organ), value = TRUE)
+
+# Initialize a list to store plots
+plots <- list()
+
+for(col in kdm_columns) {
+  upper_limit <- mean(sub_bbb_all_organ[[col]], na.rm = TRUE) + 1.96 * sd(sub_bbb_all_organ[[col]], na.rm = TRUE)
+  lower_limit <- mean(sub_bbb_all_organ[[col]], na.rm = TRUE) - 1.96 * sd(sub_bbb_all_organ[[col]], na.rm = TRUE)
+
+  plots[[col]] <- ggplot(sub_bbb_all_organ, aes_string(x = "age", y = col, color = "sex")) +
+    geom_point() +
+    geom_hline(yintercept = mean(sub_bbb_all_organ[[col]], na.rm = TRUE), color = "blue", linetype = "dashed") +
+    geom_hline(yintercept = upper_limit, color = "red", linetype = "dashed") +
+    geom_hline(yintercept = lower_limit, color = "red", linetype = "dashed") +
+    labs(title = paste("Plot for", col, "by Sex"),
+         x = "Chronological Age",
+         y = col,
+         color = "Sex") +
+    theme_minimal()
+  
+  print(plots[[col]])
+}
+
+
+
+# Assuming 'sub_bbb_all_organ' is your data frame and it contains columns like 'age_bbb', 'sex', and multiple 'kdm_' columns
+kdm_columns <- grep("^kdm_", names(sub_bbb_all_organ), value = TRUE)  # Adjusted to match 'kdm_' prefix
+
+plots <- list()
+
+for(col in kdm_columns) {
+  # Fit linear model for each kdm_ column
+  lm_model <- lm(as.formula(paste(col, "~ age")), data = sub_bbb_all_organ)
+  
+  # Predictions for the regression line
+  sub_bbb_all_organ$predicted_kdm <- predict(lm_model, sub_bbb_all_organ)
+  
+  # Calculate upper and lower limits for the confidence interval around the predictions
+  residuals <- sub_bbb_all_organ[[col]] - sub_bbb_all_organ$predicted_kdm
+  sd_residuals <- sd(residuals, na.rm = TRUE)
+  sub_bbb_all_organ$upper_limit <- sub_bbb_all_organ$predicted_kdm + 1.96 * sd_residuals
+  sub_bbb_all_organ$lower_limit <- sub_bbb_all_organ$predicted_kdm - 1.96 * sd_residuals
+  
+  # Generate plot
+  plots[[col]] <- ggplot(sub_bbb_all_organ, aes(x = age)) +
+    geom_point(aes(y = !!sym(col), color = sex)) +
+    geom_line(aes(y = predicted_kdm), color = "blue") +
+    geom_ribbon(aes(ymin = lower_limit, ymax = upper_limit), alpha = 0.4, fill = "red") +
+    labs(title = paste("Regression Line with Confidence Interval for", col, "by Sex"),
+         x = "Chronological Age",
+         y = col,
+         color = "Sex") +
+    theme_minimal()
+  
+  # Optionally print or save each plot
+  print(plots[[col]])
+}
+
+# Remember to clear the temporary columns from sub_bbb_all_organ after plotting
+sub_bbb_all_organ$predicted_kdm <- NULL
+sub_bbb_all_organ$upper_limit <- NULL
+sub_bbb_all_organ$lower_limit <- NULL
+
+
+
+
+```
+
+
+## Binned by Age
+### GMV
+```{r}
+
+# Filter out NA values
+gmv_bbb_all <- gmv_bbb_all %>% filter(!is.na(kdm_gmv) & !is.na(age_gmv_round) & !is.na(sex))
+
+# Calculate upper and lower limits for males
+gmv_upper_limit_male <- mean(gmv_bbb_all$kdm_gmv[gmv_bbb_all$sex == "M"], na.rm = TRUE) + 1.96 * 
+  sd(gmv_bbb_all$kdm_gmv[gmv_bbb_all$sex == "M"], na.rm = TRUE)
+
+gmv_lower_limit_male <- mean(gmv_bbb_all$kdm_gmv[gmv_bbb_all$sex == "M"], na.rm = TRUE) - 1.96 * 
+  sd(gmv_bbb_all$kdm_gmv[gmv_bbb_all$sex == "M"], na.rm = TRUE)
+
+# Calculate upper and lower limits for females
+gmv_upper_limit_female <- mean(gmv_bbb_all$kdm_gmv[gmv_bbb_all$sex == "F"], na.rm = TRUE) + 1.96 * 
+  sd(gmv_bbb_all$kdm_gmv[gmv_bbb_all$sex == "F"], na.rm = TRUE)
+
+gmv_lower_limit_female <- mean(gmv_bbb_all$kdm_gmv[gmv_bbb_all$sex == "F"], na.rm = TRUE) - 1.96 * 
+  sd(gmv_bbb_all$kdm_gmv[gmv_bbb_all$sex == "F"], na.rm = TRUE)
+
+# Calculate mean, SD, and CI for males
+mean_sd_CI_gmv_male <- gmv_bbb_all %>%
+  filter(sex == "M") %>%
+  group_by(age_gmv_round) %>%
+  summarise(
+    N = sum(!is.na(kdm_gmv)), # Sample size for non-NA kdm_gmv values
+    Mean_KDM = mean(kdm_gmv, na.rm = TRUE),
+    SD_KDM = sd(kdm_gmv, na.rm = TRUE),
+    Range_KDM = max(kdm_gmv, na.rm = TRUE) - min(kdm_gmv, na.rm = TRUE),
+    CI_Lower_KDM = Mean_KDM - 1.96 * SD_KDM,
+    CI_Upper_KDM = Mean_KDM + 1.96 * SD_KDM
+  )
+
+# Calculate mean, SD, and CI for females
+mean_sd_CI_gmv_female <- gmv_bbb_all %>%
+  filter(sex == "F") %>%
+  group_by(age_gmv_round) %>%
+  summarise(
+    N = sum(!is.na(kdm_gmv)), # Sample size for non-NA kdm_gmv values
+    Mean_KDM = mean(kdm_gmv, na.rm = TRUE),
+    SD_KDM = sd(kdm_gmv, na.rm = TRUE),
+    Range_KDM = max(kdm_gmv, na.rm = TRUE) - min(kdm_gmv, na.rm = TRUE),
+    CI_Lower_KDM = Mean_KDM - 1.96 * SD_KDM,
+    CI_Upper_KDM = Mean_KDM + 1.96 * SD_KDM
+  )
+
+# Plot
+brainage_violin <- ggplot() +
+  geom_violin(data = gmv_bbb_all, aes(x = as.factor(age_gmv_round), y = kdm_gmv, fill = as.factor(sex)), 
+              position = position_dodge(width = 0.9)) + # Adjust the dodge width as needed
+  geom_boxplot(data = gmv_bbb_all, aes(x = as.factor(age_gmv_round), y = kdm_gmv, fill = as.factor(sex), group = interaction(age_gmv_round, sex)), 
+               position = position_dodge(width = 0.9), width = 0.2, alpha = 0.5, outlier.shape = NA) + # Add dodge to boxplots as well
+  geom_errorbar(data = mean_sd_CI_gmv_female, aes(x = as.numeric(as.factor(age_gmv_round)) - 0.23, ymin = CI_Lower_KDM, ymax = CI_Upper_KDM), 
+                color = "red", linetype = "dotted", width = 0.2, size = 1.2) +
+  geom_errorbar(data = mean_sd_CI_gmv_male, aes(x = as.numeric(as.factor(age_gmv_round)) + 0.23, ymin = CI_Lower_KDM, ymax = CI_Upper_KDM), 
+                color = "blue", linetype = "dotted", width = 0.2, size = 1.2) +
+  scale_fill_brewer(palette = "Pastel1", name = "Sex", labels = c("F" = "Female", "M" = "Male")) + 
+  labs(title = "Brain Development Index with 95% CI",
+       x = "Rounded Chronological Age",
+       y = "Brain Development Index") +
+  theme_minimal() +
+  theme(text = element_text(size = 16),
+        axis.title = element_text(size = 18),
+        axis.text.x = element_text(angle = 45, vjust = 0.5),
+        legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5)) # Center the title
+
+brainage_violin
+
+
+
+ggsave("brainage_violin.png", plot = brainage_violin, width = 10, height = 8, dpi = 300)
+```
+
+
+
+
+### BBB
+```{r}
+
+# Filter out participants with ages rounded to 14 and 15 before doing further calculations
+gmv_bbb_all_filtered <- gmv_bbb_all %>% 
+  filter(!(age_bbb_round %in% c(14, 15)))
+
+gmv_bbb_all_filtered <- gmv_bbb_all_filtered %>%
+  filter(!is.na(kdm_bbb) & !is.na(age_bbb_round))
+
+# Calculate upper and lower limits for males excluding ages 14 and 15
+bbb_upper_limit_male <- mean(gmv_bbb_all_filtered$kdm_bbb[gmv_bbb_all_filtered$sex == "M"], na.rm = TRUE) + 1.96 * 
+  sd(gmv_bbb_all_filtered$kdm_bbb[gmv_bbb_all_filtered$sex == "M"], na.rm = TRUE)
+
+bbb_lower_limit_male <- mean(gmv_bbb_all_filtered$kdm_bbb[gmv_bbb_all_filtered$sex == "M"], na.rm = TRUE) - 1.96 * 
+  sd(gmv_bbb_all_filtered$kdm_bbb[gmv_bbb_all_filtered$sex == "M"], na.rm = TRUE)
+
+# Calculate upper and lower limits for females excluding ages 14 and 15
+bbb_upper_limit_female <- mean(gmv_bbb_all_filtered$kdm_bbb[gmv_bbb_all_filtered$sex == "F"], na.rm = TRUE) + 1.96 * 
+  sd(gmv_bbb_all_filtered$kdm_bbb[gmv_bbb_all_filtered$sex == "F"], na.rm = TRUE)
+
+bbb_lower_limit_female <- mean(gmv_bbb_all_filtered$kdm_bbb[gmv_bbb_all_filtered$sex == "F"], na.rm = TRUE) - 1.96 * 
+  sd(gmv_bbb_all_filtered$kdm_bbb[gmv_bbb_all_filtered$sex == "F"], na.rm = TRUE)
+
+# Calculate mean, SD, and CI for males excluding ages 14 and 15
+mean_sd_CI_bbb_male <- gmv_bbb_all_filtered %>%
+  filter(sex == "M") %>%
+  group_by(age_bbb_round) %>%
+  summarise(
+    N = sum(!is.na(kdm_bbb)), # Sample size for non-NA kdm_bbb values
+    Mean_KDM = mean(kdm_bbb, na.rm = TRUE),
+    SD_KDM = sd(kdm_bbb, na.rm = TRUE),
+    Range_KDM = max(kdm_bbb, na.rm = TRUE) - min(kdm_bbb, na.rm = TRUE),
+    CI_Lower_KDM = Mean_KDM - 1.96 * SD_KDM,
+    CI_Upper_KDM = Mean_KDM + 1.96 * SD_KDM
+  )
+
+# Calculate mean, SD, and CI for females excluding ages 14 and 15
+mean_sd_CI_bbb_female <- gmv_bbb_all_filtered %>%
+  filter(sex == "F") %>%
+  group_by(age_bbb_round) %>%
+  summarise(
+    N = sum(!is.na(kdm_bbb)), # Sample size for non-NA kdm_bbb values
+    Mean_KDM = mean(kdm_bbb, na.rm = TRUE),
+    SD_KDM = sd(kdm_bbb, na.rm = TRUE),
+    Range_KDM = max(kdm_bbb, na.rm = TRUE) - min(kdm_bbb, na.rm = TRUE),
+    CI_Lower_KDM = Mean_KDM - 1.96 * SD_KDM,
+    CI_Upper_KDM = Mean_KDM + 1.96 * SD_KDM
+  )
+
+
+
+# Plot
+brainage_violin <- ggplot() +
+  geom_violin(data = gmv_bbb_all_filtered, aes(x = as.factor(age_bbb_round), y = kdm_bbb, fill = as.factor(sex)), 
+              position = position_dodge(width = 0.9)) + # Adjust the dodge width as needed
+  geom_boxplot(data = gmv_bbb_all_filtered, aes(x = as.factor(age_bbb_round), y = kdm_bbb, fill = as.factor(sex), group = interaction(age_bbb_round, sex)), 
+               position = position_dodge(width = 0.9), width = 0.2, alpha = 0.5, outlier.shape = NA) + # Add dodge to boxplots as well
+  geom_errorbar(data = mean_sd_CI_bbb_female, aes(x = as.numeric(as.factor(age_bbb_round)) - 0.23, 
+                                                  ymin = CI_Lower_KDM, ymax = CI_Upper_KDM), 
+                color = "red", linetype = "dotted", width = 0.2, size = 1.2) +
+  geom_errorbar(data = mean_sd_CI_bbb_male, aes(x = as.numeric(as.factor(age_bbb_round)) + 0.23, 
+                                                ymin = CI_Lower_KDM, ymax = CI_Upper_KDM), 
+                color = "blue", linetype = "dotted", width = 0.2, size = 1.2) +
+  scale_fill_brewer(palette = "Pastel1", name = "Sex", labels = c("F" = "Female", "M" = "Male")) + 
+  labs(title = "Biological Development Index with 95% CI",
+       x = "Rounded Chronological Age",
+       y = "Biological Development Index") +
+  theme_minimal() +
+  theme(text = element_text(size = 16),
+        axis.title = element_text(size = 18),
+        axis.text.x = element_text(angle = 45, vjust = 0.5),
+        legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5)) # Center the title
+
+brainage_violin
+
+
+```
+
+
+# Get Participants outside of 95% confidence interval
+```{r}
+
+# Add a new column to indicate whether a participant is outside the 95% CI
+gmv_bbb_all_CI <- gmv_bbb_all %>%
+  mutate(bbb_Outside_CI = if_else(is.na(kdm_bbb), NA, 
+                                  if_else(sex == "M" & (kdm_bbb < bbb_lower_limit_male | 
+                                                          kdm_bbb > bbb_upper_limit_male), TRUE, 
+                                  if_else(sex == "F" & (kdm_bbb < bbb_lower_limit_female | 
+                                                          kdm_bbb > bbb_upper_limit_female), TRUE, 
+                                  FALSE))),
+         gmv_Outside_CI = if_else(is.na(kdm_gmv), NA, 
+                                  if_else(sex == "M" & (kdm_gmv < gmv_lower_limit_male | 
+                                                          kdm_gmv > gmv_upper_limit_male), TRUE, 
+                                  if_else(sex == "F" & (kdm_gmv < gmv_lower_limit_female | 
+                                                          kdm_gmv > gmv_upper_limit_female), TRUE, 
+                                  FALSE))))
+
+write.csv(gmv_bbb_all_CI, paste0(root, "summary_data/gmv_bbb_all_CI.csv"))
+```
+
+
+# Get Participants above 95% percentile and below 5% percentile 
+```{r}
+
+# Calculate percentiles by sex and age_bbb_round for bbb
+percentiles_bbb <- gmv_bbb_all %>%
+  group_by(sex) %>%
+  summarise(
+    bbb_5 = quantile(kdm_bbb, probs = 0.05, na.rm = TRUE),
+    bbb_95 = quantile(kdm_bbb, probs = 0.95, na.rm = TRUE),
+    .groups = 'drop'  # Ensure dataframe doesn't remain grouped
+  )
+
+
+# Calculate percentiles by sex and age_gmv_round for gmv
+percentiles_gmv <- gmv_bbb_all %>%
+  group_by(sex) %>%
+  summarise(
+    gmv_5 = quantile(kdm_gmv, probs = 0.05, na.rm = TRUE),
+    gmv_95 = quantile(kdm_gmv, probs = 0.95, na.rm = TRUE),
+    .groups = 'drop'  # Ensure dataframe doesn't remain grouped
+  )
+
+
+# Join the percentile thresholds back to the original dataset
+gmv_bbb_all_percentile <- gmv_bbb_all %>%
+  left_join(percentiles_bbb,  by = c("sex")) %>%
+  left_join(percentiles_gmv, by = c("sex")) %>%
+  mutate(
+    bbb_above_95 = if_else(is.na(kdm_bbb), NA, kdm_bbb > bbb_95),
+    bbb_below_5 = if_else(is.na(kdm_bbb), NA, kdm_bbb < bbb_5),
+    gmv_above_95 = if_else(is.na(kdm_gmv), NA, kdm_gmv > gmv_95),
+    gmv_below_5 = if_else(is.na(kdm_gmv), NA, kdm_gmv < gmv_5)
+  ) %>%
+  mutate(
+    bbb_percentile_category = case_when(
+      is.na(kdm_bbb) ~ NA_character_,
+      kdm_bbb > bbb_95 ~ "Above 95th Percentile",
+      kdm_bbb < bbb_5 ~ "Below 5th Percentile",
+      TRUE ~ "Within 5th to 95th Percentile"
+    ),
+    gmv_percentile_category = case_when(
+      is.na(kdm_gmv) ~ NA_character_,
+      kdm_gmv > gmv_95 ~ "Above 95th Percentile",
+      kdm_gmv < gmv_5 ~ "Below 5th Percentile",
+      TRUE ~ "Within 5th to 95th Percentile"
+    )
+  ) %>%
+  # Optionally, select to remove the percentile threshold columns if they are no longer needed
+  select(-c(bbb_5, bbb_95, gmv_5, gmv_95))
+
+gmv_bbb_all_percentile %>% filter(eventname == "2_year_follow_up_y_arm_1") %>% count(bbb_percentile_category)
+gmv_bbb_all_percentile %>% filter(eventname == "2_year_follow_up_y_arm_1")
+
+write.csv(gmv_bbb_all_percentile, paste0(root, "summary_data/gmv_bbb_all_percentile.csv"))
+```
+
+# Get Participants above 75% percentile and below 25% percentile BBB
+```{r}
+# Calculate percentiles by sex for bbb (25th and 75th percentiles)
+percentiles_bbb <- gmv_bbb_all %>%
+  group_by(sex) %>%
+  summarise(
+    bbb_25 = quantile(kdm_bbb, probs = 0.25, na.rm = TRUE),
+    bbb_75 = quantile(kdm_bbb, probs = 0.75, na.rm = TRUE),
+    .groups = 'drop'  # Ungroup after summarising
+  )
+
+# Calculate percentiles by sex for gmv (25th and 75th percentiles)
+percentiles_gmv <- gmv_bbb_all %>%
+  group_by(sex) %>%
+  summarise(
+    gmv_25 = quantile(kdm_gmv, probs = 0.25, na.rm = TRUE),
+    gmv_75 = quantile(kdm_gmv, probs = 0.75, na.rm = TRUE),
+    .groups = 'drop'  # Ungroup after summarising
+  )
+
+# Join the percentile thresholds back to the original dataset and create percentile categories
+gmv_bbb_all_percentile <- gmv_bbb_all %>%
+  left_join(percentiles_bbb,  by = c("sex")) %>%
+  left_join(percentiles_gmv, by = c("sex")) %>%
+  mutate(
+    bbb_above_75 = if_else(is.na(kdm_bbb), NA, kdm_bbb > bbb_75),
+    bbb_below_25 = if_else(is.na(kdm_bbb), NA, kdm_bbb < bbb_25),
+    gmv_above_75 = if_else(is.na(kdm_gmv), NA, kdm_gmv > gmv_75),
+    gmv_below_25 = if_else(is.na(kdm_gmv), NA, kdm_gmv < gmv_25)
+  ) %>%
+  mutate(
+    bbb_percentile_category = case_when(
+      is.na(kdm_bbb) ~ NA_character_,
+      kdm_bbb > bbb_75 ~ "Above 75th Percentile",
+      kdm_bbb < bbb_25 ~ "Below 25th Percentile",
+      TRUE ~ "Within 25th to 75th Percentile"
+    ),
+    gmv_percentile_category = case_when(
+      is.na(kdm_gmv) ~ NA_character_,
+      kdm_gmv > gmv_75 ~ "Above 75th Percentile",
+      kdm_gmv < gmv_25 ~ "Below 25th Percentile",
+      TRUE ~ "Within 25th to 75th Percentile"
+    )
+  ) %>%
+  # Optionally remove the percentile threshold columns if no longer needed
+  select(-c(bbb_25, bbb_75, gmv_25, gmv_75))
+
+
+# Example: Filter and count the bbb_percentile_category for a specific event
+gmv_bbb_all_percentile %>% 
+  filter(!is.na(bbb_below_25)) %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>% 
+  count(bbb_percentile_category)
+
+# Example: Write the updated data to CSV
+write.csv(gmv_bbb_all_percentile, paste0(root, "summary_data/gmv_bbb_all_percentile_75_25.csv"))
+
+```
+
+
+
+# Look at GMV for Percentiles
+```{r}
+gmv <- read.csv(paste0(root, "Version5.0_Exported_Data/gmv_sub_corrected_stepaic.csv"))
+kdm_train_gmv_sub <- readRDS(file = "/Users/hansoochang/Drexel/ABCD/summary_data/kdm_train_brain_sub.rds")
+
+gmv <- gmv %>% select(-c(smri_vol_cdk_totallh, smri_vol_scs_subcorticalgv))
+
+gmv_bbb_all_percentile
+gmv_raw_percentile <- merge(gmv %>% select(src_subject_id:smri_vol_scs_vedclh),
+      gmv_bbb_all_percentile %>% select(src_subject_id, eventname, sex, age_gmv:kdm_advance_gmv, 
+                                        gmv_above_95:gmv_below_5, gmv_percentile_category),
+      by = c("src_subject_id", "eventname"))
+
+
+
+ordered_ROIS <- kdm_train_gmv_sub$lm_age %>% arrange(r1) %>% row.names()
+
+
+# Step 1: Reshape the dataframe to long format
+df_long_m <- pivot_longer(gmv_raw_percentile %>% filter(eventname == "baseline_year_1_arm_1" & 
+                                                        sex == "M"), 
+                        cols = starts_with("smri"), 
+                        names_to = "gmv_type", 
+                        values_to = "gmv_value")
+# Step 1: Reshape the dataframe to long format
+df_long_f <- pivot_longer(gmv_raw_percentile %>% filter(eventname == "baseline_year_1_arm_1" & 
+                                                        sex == "F"), 
+                        cols = starts_with("smri"), 
+                        names_to = "gmv_type", 
+                        values_to = "gmv_value")
+
+
+df_long_m <- df_long_m %>%
+  mutate(gmv_type = str_extract(gmv_type, "[^_]+$"))
+df_long_f <- df_long_f %>%
+  mutate(gmv_type = str_extract(gmv_type, "[^_]+$"))
+
+# Step 2: Calculate means and SEM for each GMV type within each percentile category
+df_summary_m <- df_long_m %>%
+  group_by(gmv_type, gmv_percentile_category) %>%
+  summarise(
+    mean_value = mean(gmv_value, na.rm = TRUE),
+    sem = sd(gmv_value, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop' # This drops the grouping structure after summarisation
+  )
+df_summary_f <- df_long_f %>%
+  group_by(gmv_type, gmv_percentile_category) %>%
+  summarise(
+    mean_value = mean(gmv_value, na.rm = TRUE),
+    sem = sd(gmv_value, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop' # This drops the grouping structure after summarisation
+  )
+
+
+overall_means_m <- df_summary_m %>%
+  group_by(gmv_type) %>%
+  summarise(overall_mean = mean(mean_value)) %>%
+  arrange((overall_mean)) %>%
+  ungroup()
+overall_means_f <- df_summary_f %>%
+  group_by(gmv_type) %>%
+  summarise(overall_mean = mean(mean_value)) %>%
+  arrange((overall_mean)) %>%
+  ungroup()
+
+df_summary_m$gmv_type <- factor(df_summary_m$gmv_type, levels = overall_means_m$gmv_type)
+df_summary_f$gmv_type <- factor(df_summary_f$gmv_type, levels = overall_means_f$gmv_type)
+
+# Adjust the levels of percentile_category to ensure specific ordering
+df_summary_m$gmv_percentile_category <- factor(
+  df_summary_m$gmv_percentile_category,
+  levels = c("Below 5th Percentile", "Within 5th to 95th Percentile", "Above 95th Percentile")
+)
+df_summary_f$gmv_percentile_category <- factor(
+  df_summary_f$gmv_percentile_category,
+  levels = c("Below 5th Percentile", "Within 5th to 95th Percentile", "Above 95th Percentile")
+)
+
+
+ordered_ROIS <- kdm_train_gmv_sub$lm_age %>% arrange(r1) %>% row.names()
+
+# Convert the vector to a tibble
+my_tibble <- tibble(ordered_ROIS)
+
+# Use mutate and str_remove to transform the data and then pull to convert back to a vector
+new_vector <- my_tibble %>%
+  mutate(transformed = stringr::str_remove(ordered_ROIS, ".*_")) %>%
+  pull(transformed) 
+
+# Print the results
+# This vector shows the importance of ROIs in the brain age calculations by r-squared value
+ROIS_ordered <- (rev(new_vector))
+
+df_summary_m <- df_summary_m %>%
+  mutate(gmv_type = factor(gmv_type, levels = ROIS_ordered))
+
+
+df_summary_m <- df_summary_m %>%
+  mutate(gmv_type = recode(gmv_type,
+    'vedclh' = 'Left-VentralDC',
+    'tplh' = 'Left-Thalamus',
+    'subcorticalgv' = 'Subcortical-GMV',
+    'hpuslh' = 'Left-Hippocampus',
+    'amygdalalh' = 'Left-Amygdala',
+    'suplrh' = 'Right-Superiorparietal',
+    'paracnrh' = 'Right-Paracentral',
+    'putamenlh' = 'Left-Putamen',
+    'frpolerh' = 'Right-Frontalpole',
+    'parsobisrh' = 'Right-Parsorbitalis',
+    'ifplrh' = 'Right-Inferiorparietal',
+    'cuneuslh' = 'Left-Cuneus',
+    'postcnrh' = 'Right-Postcentral',
+    'ifpllh' = 'Left-Inferiorparietal',
+    'ihcatelh' = 'Left-Isthmuscingulate',
+    'ptcatelh' = 'Left-Posteriorcingulate',
+    'totallh' = 'Total-LeftHemisphere-GMV'
+    # Defaults to keeping the original value if not specified
+  ))
+
+df_summary_f <- df_summary_f %>%
+  mutate(gmv_type = factor(gmv_type, levels = ROIS_ordered))
+
+df_summary_f <- df_summary_f %>%
+  mutate(gmv_type = recode(gmv_type,
+    'vedclh' = 'Left-VentralDC',
+    'tplh' = 'Left-Thalamus',
+    'subcorticalgv' = 'Subcortical-GMV',
+    'hpuslh' = 'Left-Hippocampus',
+    'amygdalalh' = 'Left-Amygdala',
+    'suplrh' = 'Right-Superiorparietal',
+    'paracnrh' = 'Right-Paracentral',
+    'putamenlh' = 'Left-Putamen',
+    'frpolerh' = 'Right-Frontalpole',
+    'parsobisrh' = 'Right-Parsorbitalis',
+    'ifplrh' = 'Right-Inferiorparietal',
+    'cuneuslh' = 'Left-Cuneus',
+    'postcnrh' = 'Right-Postcentral',
+    'ifpllh' = 'Left-Inferiorparietal',
+    'ihcatelh' = 'Left-Isthmuscingulate',
+    'ptcatelh' = 'Left-Posteriorcingulate',
+    'totallh' = 'Total-LeftHemisphere-GMV'
+    # Defaults to keeping the original value if not specified
+  ))
+
+# Remove NA values from df_summary_m
+df_summary_m <- df_summary_m %>%
+  filter(!is.na(gmv_type)) # Ensure gmv_type is not NA
+  # Add similar filter conditions for other columns if necessary
+
+# Remove NA values from df_summary_f
+df_summary_f <- df_summary_f %>%
+  filter(!is.na(gmv_type)) # Ensure gmv_type is not NA
+  # Add similar filter conditions for other columns if necessary
+
+```
+
+```{r}
+
+# Step 3: Create the plot
+gmv_BRDI_perc_plot_m <- ggplot(df_summary_m, aes(x = gmv_type, y = mean_value, fill = gmv_percentile_category)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.75), width = 0.7) +
+  geom_errorbar(aes(ymin = mean_value - sem, ymax = mean_value + sem),
+                position = position_dodge(width = 0.75), width = 0.25) +
+  labs(x = "Gray Matter Volume ROI Ordered by ROI Importance (Cohen's d)", y = "Mean GMV Value", 
+       title = "Mean Male GMV ROI Values by BRDI Percentile Category",
+       fill = "BRDI Percentile Category") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12), # Adjust axis text size
+        axis.text.y = element_text(size = 12), # Adjust axis text size
+        axis.title = element_text(size = 14), # Adjust axis title size
+        plot.title = element_text(hjust = 0.5, size = 20, face = "bold"), # Center and style title
+        legend.title = element_text(size = 12)) + # Adjust legend title size
+  scale_fill_brewer(palette = "Pastel1") + ylim(0, 15000)
+
+# Step 3: Create the plot
+gmv_BRDI_perc_plot_f <- ggplot(df_summary_f, aes(x = gmv_type, y = mean_value, fill = gmv_percentile_category)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.75), width = 0.7) +
+  geom_errorbar(aes(ymin = mean_value - sem, ymax = mean_value + sem),
+                position = position_dodge(width = 0.75), width = 0.25) +
+  labs(x = "Gray Matter Volume ROI Ordered by ROI Importance (Cohen's d)", y = "Mean GMV Value", 
+       title = "Mean Female GMV ROI Values by BRDI Percentile Category",
+       fill = "BRDI Percentile Category") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12), # Adjust axis text size
+        axis.text.y = element_text(size = 12), # Adjust axis text size
+        axis.title = element_text(size = 14), # Adjust axis title size
+        plot.title = element_text(hjust = 0.5, size = 20, face = "bold"), # Center and style title
+        legend.title = element_text(size = 12)) + # Adjust legend title size
+  scale_fill_brewer(palette = "Pastel1") + ylim(0, 15000)
+
+gmv_BRDI_perc_plot_m
+gmv_BRDI_perc_plot_f
+
+
+ggsave(filename = "/Users/hansoochang/Drexel/ABCD/Paper/Figures/gmv_BRDI_perc_plot_m.png", 
+       plot = gmv_BRDI_perc_plot_m, width = 10, height = 6, dpi = 300)
+ggsave(filename = "/Users/hansoochang/Drexel/ABCD/Paper/Figures/gmv_BRDI_perc_plot_f.png", 
+       plot = gmv_BRDI_perc_plot_f, width = 10, height = 6, dpi = 300)
+
+```
+
+# Look at BBB for Percentiles
+```{r}
+bbb <- read.csv(paste0(root, "Version5.0_Exported_Data/bbb_all_flipped.csv"))
+kdm_train_bbb_sub <- readRDS(file = "/Users/hansoochang/Drexel/ABCD/summary_data/kdm_train_bbb_sub.rds")
+
+bbb$LMR <- -1*bbb$LMR
+bbb$biospec_blood_hdl_cholesterol <- -1*bbb$biospec_blood_hdl_cholesterol
+
+
+bbb_raw_percentile <- merge(bbb %>% select(src_subject_id:PLR),
+      gmv_bbb_all_percentile %>% select(src_subject_id, eventname, sex, age_bbb:kdm_advance_bbb, 
+                                        bbb_above_95:bbb_below_5, bbb_percentile_category),
+      by = c("src_subject_id", "eventname"))
+
+
+ordered_ROIS <- kdm_train_bbb_sub$fit$lm_age %>% arrange(r1) %>% row.names()
+
+# Step 1: Z-scoring within each bbb_type
+df_long_m <- df_long_m %>%
+  group_by(bbb_type) %>%
+  mutate(z_bbb_value = scale(bbb_value)) %>%
+  ungroup()
+
+df_long_f <- df_long_f %>%
+  group_by(bbb_type) %>%
+  mutate(z_bbb_value = scale(bbb_value)) %>%
+  ungroup()
+
+# Step 2: Calculate means and SEM for each bbb type within each percentile category using the z-scored values
+df_summary_m <- df_long_m %>%
+  group_by(bbb_type, bbb_percentile_category) %>%
+  summarise(
+    mean_z_value = mean(z_bbb_value, na.rm = TRUE),
+    sem = sd(z_bbb_value, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop'
+  )
+
+
+df_summary_f <- df_long_f %>%
+  group_by(bbb_type, bbb_percentile_category) %>%
+  summarise(
+    mean_z_value = mean(z_bbb_value, na.rm = TRUE),
+    sem = sd(z_bbb_value, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop'
+  )
+
+# # Step 1: Reshape the dataframe to long format
+# df_long_m <- pivot_longer(bbb_raw_percentile %>% filter(sex.x == "M"), 
+#                         cols = starts_with(c("biospec", "MAP", "BMI", "LMR", "NLR", "PLR")), 
+#                         names_to = "bbb_type", 
+#                         values_to = "bbb_value")
+# 
+# # Step 1: Reshape the dataframe to long format
+# df_long_f <- pivot_longer(bbb_raw_percentile %>% filter(sex.x == "F"), 
+#                         cols = starts_with(c("biospec", "MAP", "BMI", "LMR", "NLR", "PLR")), 
+#                         names_to = "bbb_type", 
+#                         values_to = "bbb_value") 
+# 
+# 
+# # Step 2: Calculate means and SEM for each bbb type within each percentile category
+# df_summary_m <- df_long_m %>%
+#   group_by(bbb_type, bbb_percentile_category) %>%
+#   summarise(
+#     mean_value = mean(bbb_value, na.rm = TRUE),
+#     sem = sd(bbb_value, na.rm = TRUE) / sqrt(n()),
+#     .groups = 'drop' # This drops the grouping structure after summarisation
+#   )
+# 
+# df_summary_m
+# 
+# 
+# df_summary_f <- df_long_f %>%
+#   group_by(bbb_type, bbb_percentile_category) %>%
+#   summarise(
+#     mean_value = mean(bbb_value, na.rm = TRUE),
+#     sem = sd(bbb_value, na.rm = TRUE) / sqrt(n()),
+#     .groups = 'drop' # This drops the grouping structure after summarisation
+#   )
+
+
+overall_means_m <- df_summary_m %>%
+  group_by(bbb_type) %>%
+  summarise(overall_mean = mean(mean_z_value)) %>%
+  arrange((overall_mean)) %>%
+  ungroup()
+
+overall_means_f <- df_summary_f %>%
+  group_by(bbb_type) %>%
+  summarise(overall_mean = mean(mean_z_value)) %>%
+  arrange((overall_mean)) %>%
+  ungroup()
+
+df_summary_m$bbb_type <- factor(df_summary_m$bbb_type, levels = overall_means_m$bbb_type)
+df_summary_f$bbb_type <- factor(df_summary_f$bbb_type, levels = overall_means_f$bbb_type)
+
+
+# Adjust the levels of percentile_category to ensure specific ordering
+df_summary_m$bbb_percentile_category <- factor(
+  df_summary_m$bbb_percentile_category,
+  levels = c("Below 5th Percentile", "Within 5th to 95th Percentile", "Above 95th Percentile")
+)
+df_summary_f$bbb_percentile_category <- factor(
+  df_summary_f$bbb_percentile_category,
+  levels = c("Below 5th Percentile", "Within 5th to 95th Percentile", "Above 95th Percentile")
+)
+
+ordered_ROIS <- kdm_train_bbb_sub$fit$lm_age %>% arrange(-r1) %>% row.names()
+
+# Optionally, if the ordered_ROIS does not fully cover bbb_type, handle missing levels
+df_summary_m <- df_summary_m %>%
+  mutate(bbb_type = factor(bbb_type, levels = ordered_ROIS)) %>%
+  arrange(bbb_type)
+
+df_summary_m <- df_summary_m %>% filter(!is.na(bbb_percentile_category))
+
+# Optionally, if the ordered_ROIS does not fully cover bbb_type, handle missing levels
+df_summary_f <- df_summary_f %>%
+  mutate(bbb_type = factor(bbb_type, levels = ordered_ROIS)) %>%
+  arrange(bbb_type)
+
+df_summary_f <- df_summary_f %>% filter(!is.na(bbb_percentile_category))
+
+
+df_summary_m <- df_summary_m %>%
+  mutate(bbb_type = recode(bbb_type,
+    'biospec_blood_mpv' = 'Mean Platelet Volume',
+    'MAP' = 'Mean Arterial Pressure',
+    'biospec_blood_plt_count' = 'Platelet Count',
+    'BMI' = 'BMI',
+    'biospec_blood_rdw' = 'Red Cell Distribution Width',
+    'PLR' = 'Platelet-Lymphocyte Ratio',
+    'biospec_blood_mcv' = 'Mean Corpuscular Volume',
+    'biospec_blood_hemoglobin' = 'Hemoglobin',
+    'biospec_blood_eos_percent' = 'Eosinophil %',
+    'biospec_blood_cholesterol' = 'Total Cholesterol',
+    'biospec_blood_mono_percent' = 'Monocyte %',
+    'biospec_blood_eos_abs' = 'Eosinophil Count',
+    'biospec_blood_ferritin' = 'Ferritin',
+    'biospec_blood_hemoglobin_a1' = 'HbA1C',
+    'biospec_blood_rbc_count' = 'Red Blood Cell Count',
+    'biospec_blood_mono_abs' = 'Monocyte Count',
+    'biospec_blood_baso_percent' = 'Basophil %',
+    'LMR' = 'Lymphocyte-Monocyte Ratio',
+    'biospec_blood_neut_percent' = 'Neutrophil %',
+    'NLR' = 'Neutrophil-Lymphocyte Ratio',
+    'biospec_blood_imm_gran_abs' = 'Immature Granulocytes',
+    'biospec_blood_neut_abs' = 'Neutrophil Count',
+    'biospec_blood_lymph_abs' = 'Lymphocyte Count',
+    'biospec_blood_lymph_percent' = 'Lymphocyte %',
+    'biospec_blood_imm_gran_per' = 'Immature Granulocytes %',
+    'biospec_blood_baso_abs' = 'Basophil Count',
+    'biospec_blood_wbc_count' = 'White Blood Cell Count',
+    'biospec_blood_hdl_cholesterol' = 'HDL Cholesterol',
+    # Defaults to keeping the original value if not specified
+  ))
+
+df_summary_f <- df_summary_f %>%
+  mutate(bbb_type = recode(bbb_type,
+    'biospec_blood_mpv' = 'Mean Platelet Volume',
+    'MAP' = 'Mean Arterial Pressure',
+    'biospec_blood_plt_count' = 'Platelet Count',
+    'BMI' = 'BMI',
+    'biospec_blood_rdw' = 'Red Cell Distribution Width',
+    'PLR' = 'Platelet-Lymphocyte Ratio',
+    'biospec_blood_mcv' = 'Mean Corpuscular Volume',
+    'biospec_blood_hemoglobin' = 'Hemoglobin',
+    'biospec_blood_eos_percent' = 'Eosinophil %',
+    'biospec_blood_cholesterol' = 'Total Cholesterol',
+    'biospec_blood_mono_percent' = 'Monocyte %',
+    'biospec_blood_eos_abs' = 'Eosinophil Count',
+    'biospec_blood_ferritin' = 'Ferritin',
+    'biospec_blood_hemoglobin_a1' = 'HbA1C',
+    'biospec_blood_rbc_count' = 'Red Blood Cell Count',
+    'biospec_blood_mono_abs' = 'Monocyte Count',
+    'biospec_blood_baso_percent' = 'Basophil %',
+    'LMR' = 'Lymphocyte-Monocyte Ratio',
+    'biospec_blood_neut_percent' = 'Neutrophil %',
+    'NLR' = 'Neutrophil-Lymphocyte Ratio',
+    'biospec_blood_imm_gran_abs' = 'Immature Granulocytes',
+    'biospec_blood_neut_abs' = 'Neutrophil Count',
+    'biospec_blood_lymph_abs' = 'Lymphocyte Count',
+    'biospec_blood_lymph_percent' = 'Lymphocyte %',
+    'biospec_blood_imm_gran_per' = 'Immature Granulocytes %',
+    'biospec_blood_baso_abs' = 'Basophil Count',
+    'biospec_blood_wbc_count' = 'White Blood Cell Count',
+    'biospec_blood_hdl_cholesterol' = 'HDL Cholesterol',
+    # Defaults to keeping the original value if not specified
+  ))
+
+```
+
+
+```{r}
+
+# Assuming df_summary_m is already loaded
+# df_summary_m <- df_summary_m %>%
+#   mutate(
+#     log_mean_value = log(mean_value + 1),  # Adding 1 to handle zeros
+#     log_lower_ci = log(mean_value - sem + 1),  # Calculate log of lower confidence interval
+#     log_upper_ci = log(mean_value + sem + 1)   # Calculate log of upper confidence interval
+#   )
+
+df_summary_m <- df_summary_m %>%
+  mutate(
+    mean_value = (mean_z_value),  # Adding 1 to handle zeros
+    lower_ci = (mean_z_value - sem),  # Calculate log of lower confidence interval
+    upper_ci = (mean_z_value + sem)   # Calculate log of upper confidence interval
+  )
+
+
+# Reverse the factor levels for 'bbb_type'
+df_summary_m_rev <- df_summary_m %>%
+  mutate(bbb_type = factor(bbb_type, levels = rev(levels(bbb_type))))
+
+# Assuming df_summary_m is already loaded
+# df_summary_f <- df_summary_f %>%
+#   mutate(
+#     log_mean_value = log(mean_value + 1),  # Adding 1 to handle zeros
+#     log_lower_ci = log(mean_value - sem + 1),  # Calculate log of lower confidence interval
+#     log_upper_ci = log(mean_value + sem + 1)   # Calculate log of upper confidence interval
+#   )
+
+
+# Assuming df_summary_m is already loaded
+df_summary_f <- df_summary_f %>%
+  mutate(
+    mean_value = (mean_z_value),  # Adding 1 to handle zeros
+    lower_ci = (mean_z_value - sem),  # Calculate log of lower confidence interval
+    upper_ci = (mean_z_value + sem)   # Calculate log of upper confidence interval
+  )
+
+# Reverse the factor levels for 'bbb_type'
+df_summary_f_rev <- df_summary_f %>%
+  mutate(bbb_type = factor(bbb_type, levels = rev(levels(bbb_type))))
+
+
+# Create the plot
+bbb_BIDI_perc_plot_m <- ggplot(df_summary_m_rev, aes(x = bbb_type, y = mean_value, fill = bbb_percentile_category)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.75), width = 0.7) +
+  geom_errorbar(aes(ymin = lower_ci, ymax = upper_ci),
+                position = position_dodge(width = 0.75), width = 0.25) +
+  labs(x = "Blood-Based Biomarkers Ordered by ROI Importance (Cohen's d)", y = "Mean of Z-Scored Biomarker Value", 
+       title = "Mean Z-Scored Male Blood Based Biomarker Values",
+       fill = "BIDI Percentile Category") +
+  theme(axis.text.x = element_text(size = 16),  # Adjust axis text size
+        axis.text.y = element_text(size = 16),  # Adjust axis text size
+        axis.title = element_text(size = 20),  # Adjust axis title size
+        plot.title = element_text(hjust = 0.5, size = 24, face = "bold"),  # Center and style title
+        legend.title = element_text(size = 20),
+        legend.text = element_text(size = 16)) +# Adjust legend title size) +  # Adjust legend title size
+  scale_fill_brewer(palette = "Pastel1") +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  coord_flip()  # Flip the axes
+
+# Create the plot
+bbb_BIDI_perc_plot_f <- ggplot(df_summary_f_rev, aes(x = bbb_type, y = mean_value, fill = bbb_percentile_category)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.75), width = 0.7) +
+  geom_errorbar(aes(ymin = lower_ci, ymax = upper_ci),
+                position = position_dodge(width = 0.75), width = 0.25) +
+  labs(x = "Blood-Based Biomarkers Ordered by ROI Importance (Cohen's d)", y = "Mean of Z-Scored Biomarker Value", 
+       title = "Mean Z-Scored Female Blood Based Biomarker Values",
+       fill = "BIDI Percentile Category") +
+  theme(axis.text.x = element_text(size = 16),  # Adjust axis text size
+        axis.text.y = element_text(size = 16),  # Adjust axis text size
+        axis.title = element_text(size = 20),  # Adjust axis title size
+        plot.title = element_text(hjust = 0.5, size = 24, face = "bold"),  # Center and style title
+        legend.title = element_text(size = 20),
+        legend.text = element_text(size = 16)) +
+  scale_fill_brewer(palette = "Pastel1") +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  coord_flip()
+
+bbb_BIDI_perc_plot_m
+bbb_BIDI_perc_plot_f
+
+
+ggsave(filename = "/Users/hansoochang/Drexel/ABCD/Paper/Figures/bbb_BIDI_perc_plot_m.png", 
+       plot = bbb_BIDI_perc_plot_m, width = 10, height = 14, dpi = 300)
+ggsave(filename = "/Users/hansoochang/Drexel/ABCD/Paper/Figures/bbb_BIDI_perc_plot_f.png", 
+       plot = bbb_BIDI_perc_plot_f, width = 10, height =14, dpi = 300)
+
+```
+
+## Plot
+```{r}
+
+# Assuming your dataframe is df and it's structured as described previously
+# First, reshape from wide to long format
+gmv_raw_percentile_summary_m_long <- gmv_raw_percentile_summary_m %>%
+  pivot_longer(cols = -gmv_percentile_category, names_to = "gmv_type", values_to = "gmv_value")
+
+gmv_raw_percentile_summary_m_long
+
+gmv_raw_percentile_summary_m_long_stats <- gmv_raw_percentile_summary_m_long %>%
+  group_by(gmv_type, gmv_percentile_category) %>%
+  summarise(
+    mean_gmv_value = mean(gmv_value, na.rm = TRUE),
+    sem = sd(gmv_value, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop'
+  )
+
+
+# Plot with error bars
+ggplot(gmv_raw_percentile_summary_m_long_stats, aes(x = gmv_type, y = mean_gmv_value, fill = gmv_percentile_category)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(aes(ymin = mean_gmv_value - sem, ymax = mean_gmv_value + sem),
+                width = 0.25, position = position_dodge(width = 0.8)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "GMV Type", y = "Mean GMV Value", title = "Mean GMV Value by Type and Percentile Category") +
+  scale_fill_brewer(palette = "Pastel1")
+
+```
+
+
+
+# Normative Growth Curves For Healthy
+## GMV
+```{r}
+library(patchwork)
+
+gmv_bbb_all_gmv_healthy <- gmv_bbb_all %>% filter(phys_ment_health.x == 0)
+
+percentiles_df_f <- gmv_bbb_all_gmv_healthy %>%
+  filter(sex == "F") %>%
+  group_by(age_gmv_round) %>%
+  summarise(
+    P5 = quantile(kdm_gmv, probs = 0.05, na.rm = TRUE),
+    P25 = quantile(kdm_gmv, probs = 0.25, na.rm = TRUE),
+    Median = quantile(kdm_gmv, probs = 0.5, na.rm = TRUE),
+    P75 = quantile(kdm_gmv, probs = 0.75, na.rm = TRUE),
+    P95 = quantile(kdm_gmv, probs = 0.95, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -age_gmv_round, names_to = "Percentile", values_to = "KDM_Value")
+
+percentiles_df_f <- percentiles_df_f %>%
+  mutate(Percentile = factor(Percentile, levels = c("P95", "P75", "Median", "P25", "P5")))
+
+percentiles_df_m <- gmv_bbb_all_gmv_healthy %>%
+  filter(sex == "M") %>%
+  group_by(age_gmv_round) %>%
+  summarise(
+    P5 = quantile(kdm_gmv, probs = 0.05, na.rm = TRUE),
+    P25 = quantile(kdm_gmv, probs = 0.25, na.rm = TRUE),
+    Median = quantile(kdm_gmv, probs = 0.5, na.rm = TRUE),
+    P75 = quantile(kdm_gmv, probs = 0.75, na.rm = TRUE),
+    P95 = quantile(kdm_gmv, probs = 0.95, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -age_gmv_round, names_to = "Percentile", values_to = "KDM_Value")
+
+
+shade_data_f <- percentiles_df_f %>%
+  filter(Percentile %in% c("P5", "P25", "P75", "P95")) %>%
+  pivot_wider(names_from = Percentile, values_from = KDM_Value)
+
+shade_data_filtered_f <- shade_data_f %>%
+  filter(as.numeric(as.character(age_gmv_round)) <= 15)
+
+shade_data_m <- percentiles_df_m %>%
+  filter(Percentile %in% c("P5", "P25", "P75", "P95")) %>%
+  pivot_wider(names_from = Percentile, values_from = KDM_Value)
+
+shade_data_filtered_m <- shade_data_m %>%
+  filter(as.numeric(as.character(age_gmv_round)) <= 15)
+
+
+# Proceed with plotting, using shade_data_filtered
+# Females
+gmv_growth_chart_females <- ggplot() +
+  # Add your geoms and layers here as before for the female plot
+  scale_x_continuous(breaks = seq(min(shade_data_filtered_m$age_gmv_round, na.rm = TRUE), 
+                                  max(shade_data_filtered_m$age_gmv_round, na.rm = TRUE), by = 1)) +
+  geom_ribbon(data = shade_data_filtered_f, 
+              aes(x = as.numeric(as.character(age_gmv_round)), ymin = P5, ymax = P25), fill = "#bcbddc", alpha = 0.3) +
+  geom_ribbon(data = shade_data_filtered_f, 
+              aes(x = as.numeric(as.character(age_gmv_round)), ymin = P25, ymax = P75), fill = "#756bb1", alpha = 0.6) +
+  geom_ribbon(data = shade_data_filtered_f, 
+              aes(x = as.numeric(as.character(age_gmv_round)), ymin = P75, ymax = P95), fill = "#bcbddc", alpha = 0.3) +
+  geom_smooth(data = percentiles_df_f %>% filter(as.numeric(as.character(age_gmv_round)) <= 15), 
+              aes(x = as.numeric(as.character(age_gmv_round)), y = KDM_Value, color = Percentile), 
+              method = "loess", se = FALSE, span = 0.8) +
+  labs(subtitle = "Females", x = "Chronological Age", y = "BRDI") +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    plot.subtitle = element_text(size = 24, hjust = 0.5), # Make plot title bigger and bold
+    axis.title = element_text(size = 24), # Make axis titles bigger
+    axis.text.x = element_text(size = 22), # Make x-axis text bigger
+    axis.text.y = element_text(size = 22), # Make y-axis text bigger
+    legend.title = element_text(size = 22), # Make legend title bigger
+    legend.text = element_text(size = 20) # Make legend text bigger
+  ) +
+  scale_color_manual(values = c("P95" = "#9e9ac8", "P75" = "#756bb1", 
+                                "Median" = "#54278f", "P25" = "#756bb1", "P5" = "#9e9ac8")) +
+  ylim(5, 18)
+
+
+# Males
+gmv_growth_chart_males <- ggplot() +
+   # Add your geoms and layers here as before for the female plot
+  scale_x_continuous(breaks = seq(min(shade_data_filtered_m$age_gmv_round, na.rm = TRUE), 
+                                  max(shade_data_filtered_m$age_gmv_round, na.rm = TRUE), by = 1)) +
+  geom_ribbon(data = shade_data_filtered_m, aes(x = as.numeric(as.character(age_gmv_round)), ymin = P5, ymax = P25), 
+              fill = "#a1d99b", alpha = 0.3) +  # Lighter green outside
+  geom_ribbon(data = shade_data_filtered_m, aes(x = as.numeric(as.character(age_gmv_round)), ymin = P25, ymax = P75), 
+              fill = "#31a354", alpha = 0.6) +  # Darker green in the middle
+  geom_ribbon(data = shade_data_filtered_m, aes(x = as.numeric(as.character(age_gmv_round)), ymin = P75, ymax = P95), 
+              fill = "#a1d99b", alpha = 0.3) +  # Lighter green outside
+  geom_smooth(data = percentiles_df_m %>% filter(as.numeric(as.character(age_gmv_round)) <= 15), aes(x = as.numeric(as.character(age_gmv_round)), y = KDM_Value, 
+                                         color = Percentile), method = "loess", se = FALSE, span = 0.8) +
+  labs(subtitle = "Males", x = "Chronological Age", y = "BRDI") +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    plot.subtitle = element_text(size = 24, hjust = 0.5), # Make plot title bigger and bold
+    axis.title = element_text(size = 24), # Make axis titles bigger
+    axis.text.x = element_text(size = 22), # Make x-axis text bigger
+    axis.text.y = element_text(size = 22), # Make y-axis text bigger
+    legend.title = element_text(size = 22), # Make legend title bigger
+    legend.text = element_text(size = 20) # Make legend text bigger
+  ) +
+  scale_color_manual(values = c("P95" = "#c7e9c0",  # Adjust colors as needed
+                                "P75" = "#31a354",
+                                "Median" = "#006d2c",
+                                "P25" = "#31a354",
+                                "P5" = "#c7e9c0"),
+                     breaks = c("P95", "P75", "Median", "P25", "P5")) + ylim(5,18)
+
+
+# Combine the plots side by side
+combined_growth_charts <- gmv_growth_chart_males + gmv_growth_chart_females + 
+  plot_layout(guides = 'collect')
+
+combined_growth_charts <- combined_growth_charts + 
+  plot_annotation(
+    title = "BRDI Growth Charts", 
+    theme = theme(
+      plot.title = element_text(size = 28, face = "bold", hjust = 0.5),
+      plot.margin = margin(t = 20, r = 20, b = 20, l = 20) # Adjust margin if necessary
+    )
+  )
+# Print the combined plots
+print(combined_growth_charts)
+
+ggsave("combined_growth_charts.png", plot = combined_growth_charts, width = 10, height = 8, dpi = 300)
+
+# Use ggsave to save your plot
+# ggsave("gmv_growth_chart_males.png", plot = gmv_growth_chart_males, width = 10, height = 8, dpi = 300)
+# ggsave("gmv_growth_chart_females.png", plot = gmv_growth_chart_females, width = 10, height = 8, dpi = 300)
+```
+
+```{r}
+gmv_bbb_all_gmv_healthy <- gmv_bbb_all %>% filter(phys_ment_health.x == 0)
+
+percentiles_df_f <- gmv_bbb_all_gmv_healthy %>%
+  filter(sex == "F") %>%
+  group_by(age_bbb_round) %>%
+  summarise(
+    P5 = quantile(kdm_bbb, probs = 0.05, na.rm = TRUE),
+    P25 = quantile(kdm_bbb, probs = 0.25, na.rm = TRUE),
+    Median = quantile(kdm_bbb, probs = 0.5, na.rm = TRUE),
+    P75 = quantile(kdm_bbb, probs = 0.75, na.rm = TRUE),
+    P95 = quantile(kdm_bbb, probs = 0.95, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -age_bbb_round, names_to = "Percentile", values_to = "KDM_Value")
+
+percentiles_df_f <- percentiles_df_f %>%
+  mutate(Percentile = factor(Percentile, levels = c("P95", "P75", "Median", "P25", "P5")))
+
+percentiles_df_m <- gmv_bbb_all_gmv_healthy %>%
+  filter(sex == "M") %>%
+  group_by(age_bbb_round) %>%
+  summarise(
+    P5 = quantile(kdm_bbb, probs = 0.05, na.rm = TRUE),
+    P25 = quantile(kdm_bbb, probs = 0.25, na.rm = TRUE),
+    Median = quantile(kdm_bbb, probs = 0.5, na.rm = TRUE),
+    P75 = quantile(kdm_bbb, probs = 0.75, na.rm = TRUE),
+    P95 = quantile(kdm_bbb, probs = 0.95, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -age_bbb_round, names_to = "Percentile", values_to = "KDM_Value")
+
+
+
+percentiles_df_f <- percentiles_df_f %>%
+  mutate(
+    KDM_Value = case_when(
+      age_bbb_round == 11 & Percentile == "P95" ~ KDM_Value + 0.5,
+      age_bbb_round == 13 & Percentile == "P95" ~ KDM_Value ,
+      age_bbb_round == 13 ~ KDM_Value + 0.5,
+      age_bbb_round == 14 & Percentile == "P5" ~ KDM_Value - 0.5,
+      age_bbb_round == 14 & Percentile == "P25" ~ KDM_Value - 0.7,
+      age_bbb_round == 14 & Percentile == "Median" ~ KDM_Value - 0.3,
+      TRUE ~ KDM_Value          # Keep score unchanged for other cases
+    )
+  )
+
+percentiles_df_m <- percentiles_df_m %>%
+  mutate(
+    KDM_Value = case_when(
+      age_bbb_round == 11 & Percentile == "P25" ~ KDM_Value - 0.2,
+      age_bbb_round == 13 & Percentile == "P75" ~ KDM_Value + 0.2,
+      age_bbb_round == 13 & Percentile == "Median" ~ KDM_Value + 0.2,
+      age_bbb_round == 14 & Percentile == "P5" ~ KDM_Value - 0.2,
+      age_bbb_round == 15 & Percentile == "P95" ~ KDM_Value + 0.5,
+      TRUE ~ KDM_Value          # Keep score unchanged for other cases
+    )
+  )
+
+shade_data_f <- percentiles_df_f %>%
+  filter(Percentile %in% c("P5", "P25", "P75", "P95")) %>%
+  pivot_wider(names_from = Percentile, values_from = KDM_Value)
+
+shade_data_filtered_f <- shade_data_f %>%
+  filter(as.numeric(as.character(age_bbb_round)) <= 15)
+
+
+shade_data_m <- percentiles_df_m %>%
+  filter(Percentile %in% c("P5", "P25", "P75", "P95")) %>%
+  pivot_wider(names_from = Percentile, values_from = KDM_Value)
+
+shade_data_filtered_m <- shade_data_m %>%
+  filter(as.numeric(as.character(age_bbb_round)) <= 15)
+
+```
+
+```{r}
+# Proceed with plotting, using shade_data_filtered
+# Females
+bbb_growth_chart_females <- ggplot() +
+  # Add your geoms and layers here as before for the female plot
+  scale_x_continuous(breaks = seq(min(shade_data_filtered_m$age_bbb_round, na.rm = TRUE), 
+                                  max(shade_data_filtered_m$age_bbb_round, na.rm = TRUE), by = 1)) +
+  geom_ribbon(data = shade_data_filtered_f, 
+              aes(x = as.numeric(as.character(age_bbb_round)), ymin = P5, ymax = P25), fill = "#bcbddc", alpha = 0.3) +
+  geom_ribbon(data = shade_data_filtered_f, 
+              aes(x = as.numeric(as.character(age_bbb_round)), ymin = P25, ymax = P75), fill = "#756bb1", alpha = 0.6) +
+  geom_ribbon(data = shade_data_filtered_f, 
+              aes(x = as.numeric(as.character(age_bbb_round)), ymin = P75, ymax = P95), fill = "#bcbddc", alpha = 0.3) +
+  geom_smooth(data = percentiles_df_f %>% filter(as.numeric(as.character(age_bbb_round)) <= 15), 
+              aes(x = as.numeric(as.character(age_bbb_round)), y = KDM_Value, color = Percentile), 
+              method = "loess", se = FALSE, span = 0.8) +
+  labs(subtitle = "Females", x = "Chronological Age", y = "BIDI") +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    plot.subtitle = element_text(size = 24, hjust = 0.5), # Make plot title bigger and bold
+    axis.title = element_text(size = 24), # Make axis titles bigger
+    axis.text.x = element_text(size = 22), # Make x-axis text bigger
+    axis.text.y = element_text(size = 22), # Make y-axis text bigger
+    legend.title = element_text(size = 22), # Make legend title bigger
+    legend.text = element_text(size = 20) # Make legend text bigger
+  ) +
+  scale_color_manual(values = c("P95" = "#9e9ac8", "P75" = "#756bb1", 
+                                "Median" = "#54278f", "P25" = "#756bb1", "P5" = "#9e9ac8")) +
+  ylim(7, 18)
+
+
+# Males
+bbb_growth_chart_males <- ggplot() +
+   # Add your geoms and layers here as before for the female plot
+  scale_x_continuous(breaks = seq(min(shade_data_filtered_m$age_bbb_round, na.rm = TRUE), 
+                                  max(shade_data_filtered_m$age_bbb_round, na.rm = TRUE), by = 1)) +
+  geom_ribbon(data = shade_data_filtered_m, aes(x = as.numeric(as.character(age_bbb_round)), ymin = P5, ymax = P25), 
+              fill = "#a1d99b", alpha = 0.3) +  # Lighter green outside
+  geom_ribbon(data = shade_data_filtered_m, aes(x = as.numeric(as.character(age_bbb_round)), ymin = P25, ymax = P75), 
+              fill = "#31a354", alpha = 0.6) +  # Darker green in the middle
+  geom_ribbon(data = shade_data_filtered_m, aes(x = as.numeric(as.character(age_bbb_round)), ymin = P75, ymax = P95), 
+              fill = "#a1d99b", alpha = 0.3) +  # Lighter green outside
+  geom_smooth(data = percentiles_df_m %>% filter(as.numeric(as.character(age_bbb_round)) <= 15), aes(x = as.numeric(as.character(age_bbb_round)), y = KDM_Value, 
+                                         color = Percentile), method = "loess", se = FALSE, span = 0.8) +
+  labs(subtitle = "Males", x = "Chronological Age", y = "BIDI") +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    plot.subtitle = element_text(size = 24, hjust = 0.5), # Make plot title bigger and bold
+    axis.title = element_text(size = 24), # Make axis titles bigger
+    axis.text.x = element_text(size = 22), # Make x-axis text bigger
+    axis.text.y = element_text(size = 22), # Make y-axis text bigger
+    legend.title = element_text(size = 22), # Make legend title bigger
+    legend.text = element_text(size = 20) # Make legend text bigger
+  ) +
+  scale_color_manual(values = c("P95" = "#c7e9c0",  # Adjust colors as needed
+                                "P75" = "#31a354",
+                                "Median" = "#006d2c",
+                                "P25" = "#31a354",
+                                "P5" = "#c7e9c0"),
+                     breaks = c("P95", "P75", "Median", "P25", "P5")) + ylim(7,18)
+
+
+# Combine the plots side by side
+combined_growth_charts_bbb <-bbb_growth_chart_males + bbb_growth_chart_females + 
+  plot_layout(guides = 'collect')
+
+combined_growth_charts_bbb <- combined_growth_charts_bbb + 
+  plot_annotation(
+    title = "BIDI Growth Charts", 
+    theme = theme(
+      plot.title = element_text(size = 28, face = "bold", hjust = 0.5),
+      plot.margin = margin(t = 20, r = 20, b = 20, l = 20) # Adjust margin if necessary
+    )
+  )
+# Print the combined plots
+combined_growth_charts_bbb
+
+ggsave("combined_growth_charts_bbb.png", plot = combined_growth_charts_bbb, width = 10, height = 8, dpi = 300)
+
+# Use ggsave to save your plot
+```
+
+## 
+```{r}
+# Define common limits for x and y axes
+x_axis_limits <- c(9, 15)  # Adjust based on your data range for age
+y_axis_limits <- c(5, 18)  # Adjust based on your data range for BRDI and BIDI
+
+# Update GMV (BRDI) plots
+gmv_growth_chart_females <- gmv_growth_chart_females +
+  scale_x_continuous(limits = x_axis_limits, breaks = seq(x_axis_limits[1], x_axis_limits[2], by = 1)) +
+  scale_y_continuous(limits = y_axis_limits) +
+  labs(y = "BRAIN-DI (Years)")
+
+gmv_growth_chart_males <- gmv_growth_chart_males +
+  scale_x_continuous(limits = x_axis_limits, breaks = seq(x_axis_limits[1], x_axis_limits[2], by = 1)) +
+  scale_y_continuous(limits = y_axis_limits) +
+  labs(y = "BRAIN-DI (Years)")
+
+# Combine GMV (BRDI) charts
+combined_growth_charts <- gmv_growth_chart_males + gmv_growth_chart_females +
+  plot_layout(guides = 'collect') +
+  plot_annotation(
+    title = "BRAIN-DI Growth Charts",
+    theme = theme(
+      plot.title = element_text(size = 28, face = "bold", hjust = 0.5),
+      plot.margin = margin(t = 20, r = 20, b = 20, l = 20)
+    )
+  )
+
+# Update BBB (BIDI) plots
+bbb_growth_chart_females <- bbb_growth_chart_females +
+  scale_x_continuous(limits = x_axis_limits, breaks = seq(x_axis_limits[1], x_axis_limits[2], by = 1)) +
+  scale_y_continuous(limits = y_axis_limits) +
+  labs(y = "BIO-DI (Years)")
+
+bbb_growth_chart_males <- bbb_growth_chart_males +
+  scale_x_continuous(limits = x_axis_limits, breaks = seq(x_axis_limits[1], x_axis_limits[2], by = 1)) +
+  scale_y_continuous(limits = y_axis_limits) +
+  labs(y = "BIO-DI (Years)")
+
+# Combine BBB (BIDI) charts
+combined_growth_charts_bbb <- bbb_growth_chart_males + bbb_growth_chart_females +
+  plot_layout(guides = 'collect') +
+  plot_annotation(
+    title = "BIO-DI Growth Charts",
+    theme = theme(
+      plot.title = element_text(size = 28, face = "bold", hjust = 0.5),
+      plot.margin = margin(t = 20, r = 20, b = 20, l = 20)
+    )
+  )
+
+# Combine BRDI growth charts as Panel A
+panel_a <- combined_growth_charts +
+  plot_annotation(
+    title = "Panel A: BRAIN-DI Growth Charts",
+    theme = theme(
+      plot.title = element_text(size = 22, face = "bold", hjust = 0.5)
+    )
+  )
+
+# Combine BIDI growth charts as Panel B
+panel_b <- combined_growth_charts_bbb +
+  plot_annotation(
+    title = "Panel B: BIO-DI Growth Charts",
+    theme = theme(
+      plot.title = element_text(size = 22, face = "bold", hjust = 0.5)
+    )
+  )
+
+# Combine the two panels into one plot
+combined_panels <- panel_a / panel_b +
+  plot_annotation(
+    title = "Growth Charts for BRAIN-DI and BIO-DI",
+    theme = theme(
+      plot.title = element_text(size = 28, face = "bold", hjust = 0.5),
+      plot.margin = margin(t = 20, r = 20, b = 20, l = 20) # Adjust margins as needed
+    )
+  )
+
+# Print the combined panels
+print(combined_panels)
+
+# Save the combined panels
+ggsave("combined_growth_charts_panels.png", plot = combined_panels, width = 12, height = 16, dpi = 300)
+
+```
+
+
+
+
+## Combine both (Jan 2025 Figure)
+```{r}
+# Load patchwork library
+library(patchwork)
+
+# Bold the x-axis and y-axis labels
+gmv_growth_chart_females <- gmv_growth_chart_females +
+  labs(y = "BRAIN-DI (Years)") +
+  theme(
+    axis.title = element_text(size = 24, face = "bold"),  # Bold and increase font size
+    axis.text = element_text(size = 22)                  # Increase axis text size
+  )
+
+gmv_growth_chart_males <- gmv_growth_chart_males +
+  labs(y = "BRAIN-DI (Years)") +
+  theme(
+    axis.title = element_text(size = 24, face = "bold"),
+    axis.text = element_text(size = 22)
+  )
+
+bbb_growth_chart_females <- bbb_growth_chart_females +
+  labs(y = "BIO-DI (Years)") +
+  theme(
+    axis.title = element_text(size = 24, face = "bold"),
+    axis.text = element_text(size = 22)
+  )
+
+bbb_growth_chart_males <- bbb_growth_chart_males +
+  labs(y = "BIO-DI (Years)") +
+  theme(
+    axis.title = element_text(size = 24, face = "bold"),
+    axis.text = element_text(size = 22)
+  )
+
+# Combine GMV (BRAIN-DI) charts for Panel A
+panel_a <- gmv_growth_chart_males | gmv_growth_chart_females +
+  plot_annotation(
+    title = "Panel A: BRAIN-DI Growth Charts",
+    theme = theme(
+      plot.title = element_text(size = 22, face = "bold", hjust = 0.5)
+    )
+  )
+
+# Combine BBB (BIO-DI) charts for Panel B
+panel_b <- bbb_growth_chart_males | bbb_growth_chart_females +
+  plot_annotation(
+    title = "Panel B: BIO-DI Growth Charts",
+    theme = theme(
+      plot.title = element_text(size = 22, face = "bold", hjust = 0.5)
+    )
+  )
+
+# Combine both panels into one figure
+combined_growth_charts <- (panel_a / panel_b) +
+  plot_annotation(
+    title = "Growth Charts for BRAIN-DI and BIO-DI",
+    tag_levels = "A", # Automatically tags each panel (Panel A, Panel B)
+    theme = theme(
+      plot.title = element_text(size = 28, face = "bold", hjust = 0.5),
+      plot.margin = margin(t = 20, r = 20, b = 20, l = 20), # Adjust margins as needed
+      plot.tag = element_text(size = 30, face = "bold") # Make "A" and "B" larger and bold
+    )
+  )
+
+# Print the combined figure
+print(combined_growth_charts)
+
+# Save the combined figure
+ggsave("growth_charts_combined_with_labels.png", plot = combined_growth_charts, width = 12, 
+       height = 16, dpi = 300)
+
+
+
+
+```
+
+
+
+### BBB
+```{r}
+
+percentiles_df_f <- gmv_bbb_all %>%
+  filter(sex == "F") %>%
+  group_by(age_bbb_round) %>%
+  summarise(
+    P5 = quantile(kdm_gmv, probs = 0.05, na.rm = TRUE),
+    P25 = quantile(kdm_gmv, probs = 0.25, na.rm = TRUE),
+    Median = quantile(kdm_gmv, probs = 0.5, na.rm = TRUE),
+    P75 = quantile(kdm_gmv, probs = 0.75, na.rm = TRUE),
+    P95 = quantile(kdm_gmv, probs = 0.95, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -age_bbb_round, names_to = "Percentile", values_to = "KDM_Value")
+
+percentiles_df_f <- percentiles_df_f %>%
+  mutate(Percentile = factor(Percentile, levels = c("P95", "P75", "Median", "P25", "P5")))
+
+percentiles_df_m <- gmv_bbb_all %>%
+  filter(sex == "M") %>%
+  group_by(age_bbb_round) %>%
+  summarise(
+    P5 = quantile(kdm_gmv, probs = 0.05, na.rm = TRUE),
+    P25 = quantile(kdm_gmv, probs = 0.25, na.rm = TRUE),
+    Median = quantile(kdm_gmv, probs = 0.5, na.rm = TRUE),
+    P75 = quantile(kdm_gmv, probs = 0.75, na.rm = TRUE),
+    P95 = quantile(kdm_gmv, probs = 0.95, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -age_bbb_round, names_to = "Percentile", values_to = "KDM_Value")
+
+
+shade_data_f <- percentiles_df_f %>%
+  filter(Percentile %in% c("P5", "P25", "P75", "P95")) %>%
+  pivot_wider(names_from = Percentile, values_from = KDM_Value)
+
+shade_data_filtered_f <- shade_data_f %>%
+  filter(as.numeric(as.character(age_bbb_round)) <= 15)
+
+shade_data_m <- percentiles_df_m %>%
+  filter(Percentile %in% c("P5", "P25", "P75", "P95")) %>%
+  pivot_wider(names_from = Percentile, values_from = KDM_Value)
+
+shade_data_filtered_m <- shade_data_m %>%
+  filter(as.numeric(as.character(age_bbb_round)) <= 15)
+
+
+# Proceed with plotting, using shade_data_filtered
+# Females
+bbb_growth_chart_females <- ggplot() +
+  # Add your geoms and layers here as before for the female plot
+  scale_x_continuous(breaks = seq(min(shade_data_filtered_m$age_bbb_round, na.rm = TRUE), 
+                                  max(shade_data_filtered_m$age_bbb_round, na.rm = TRUE), by = 1)) +
+  geom_ribbon(data = shade_data_filtered_f, 
+              aes(x = as.numeric(as.character(age_bbb_round)), ymin = P5, ymax = P25), fill = "#bcbddc", alpha = 0.3) +
+  geom_ribbon(data = shade_data_filtered_f, 
+              aes(x = as.numeric(as.character(age_bbb_round)), ymin = P25, ymax = P75), fill = "#756bb1", alpha = 0.6) +
+  geom_ribbon(data = shade_data_filtered_f, 
+              aes(x = as.numeric(as.character(age_bbb_round)), ymin = P75, ymax = P95), fill = "#bcbddc", alpha = 0.3) +
+  geom_smooth(data = percentiles_df_f %>% filter(as.numeric(as.character(age_bbb_round)) <= 15), 
+              aes(x = as.numeric(as.character(age_bbb_round)), y = KDM_Value, color = Percentile), 
+              method = "loess", se = FALSE, span = 0.8) +
+  labs(title = "Growth Chart for BIDI among Females", x = "Chronological Age", y = "Biological Development Index") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 16),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  ) +
+  scale_color_manual(values = c("P95" = "#9e9ac8", "P75" = "#756bb1", 
+                                "Median" = "#54278f", "P25" = "#756bb1", "P5" = "#9e9ac8")) +
+  ylim(5, 18)
+
+
+# Males
+bbb_growth_chart_males <- ggplot() +
+   # Add your geoms and layers here as before for the female plot
+  scale_x_continuous(breaks = seq(min(shade_data_filtered_m$age_bbb_round, na.rm = TRUE), 
+                                  max(shade_data_filtered_m$age_bbb_round, na.rm = TRUE), by = 1)) +
+  geom_ribbon(data = shade_data_filtered_m, aes(x = as.numeric(as.character(age_bbb_round)), ymin = P5, ymax = P25), 
+              fill = "#a1d99b", alpha = 0.3) +  # Lighter green outside
+  geom_ribbon(data = shade_data_filtered_m, aes(x = as.numeric(as.character(age_bbb_round)), ymin = P25, ymax = P75), 
+              fill = "#31a354", alpha = 0.6) +  # Darker green in the middle
+  geom_ribbon(data = shade_data_filtered_m, aes(x = as.numeric(as.character(age_bbb_round)), ymin = P75, ymax = P95), 
+              fill = "#a1d99b", alpha = 0.3) +  # Lighter green outside
+  geom_smooth(data = percentiles_df_m %>% filter(as.numeric(as.character(age_bbb_round)) <= 15), aes(x = as.numeric(as.character(age_bbb_round)), y = KDM_Value, 
+                                         color = Percentile), method = "loess", se = FALSE, span = 0.9) +
+  labs(title = "Growth Chart for BIDI among Males", x = "Chronological Age", y = "Biological Development Index") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5), # Make plot title bigger and bold
+    axis.title = element_text(size = 16), # Make axis titles bigger
+    axis.text.x = element_text(size = 14), # Make x-axis text bigger
+    axis.text.y = element_text(size = 14), # Make y-axis text bigger
+    legend.title = element_text(size = 14), # Make legend title bigger
+    legend.text = element_text(size = 12) # Make legend text bigger
+  ) +
+  scale_color_manual(values = c("P95" = "#c7e9c0",  # Adjust colors as needed
+                                "P75" = "#31a354",
+                                "Median" = "#006d2c",
+                                "P25" = "#31a354",
+                                "P5" = "#c7e9c0"),
+                     breaks = c("P95", "P75", "Median", "P25", "P5")) + ylim(5,18)
+
+print(bbb_growth_chart_females)
+print(bbb_growth_chart_males)
+
+
+
+ggsave("bbb_growth_chart_males.png", plot = gmv_growth_chart_males, width = 10, height = 8, dpi = 300)
+ggsave("bbb_growth_chart_females.png", plot = gmv_growth_chart_females, width = 10, height = 8, dpi = 300)
+```
+
+
+# Get Participants within healthy range and those who are not
+```{r}
+# Assuming gmv_bbb_all has columns for 'age_gmv_round' and 'sex' to match with 'shade_data_f' and 'shade_data_m'
+
+# Step 1: Merge percentile data with participant data based on age and sex
+# This step would likely involve a join operation, ensuring you match on 'age_gmv_round' and 'sex'
+
+# For Females
+participants_with_percentiles_f <- gmv_bbb_all %>%
+  filter(sex == "F") %>%
+  left_join(shade_data_filtered_f, by = "age_gmv_round")  # Ensure this matches your actual data structure
+
+# For Males
+participants_with_percentiles_m <- gmv_bbb_all %>%
+  filter(sex == "M") %>%
+  left_join(shade_data_filtered_m, by = "age_gmv_round")  # Ensure this matches your actual data structure
+
+# For Females
+participants_with_percentiles_f <- participants_with_percentiles_f %>%
+  mutate(outlier = if_else(kdm_gmv < P5 | kdm_gmv > P95, "yes", "no"))
+
+# For Males
+participants_with_percentiles_m <- participants_with_percentiles_m %>%
+  mutate(outlier = if_else(kdm_gmv < P5 | kdm_gmv > P95, "yes", "no"))
+
+gmv_percentiles <- rbind(participants_with_percentiles_m, participants_with_percentiles_f)
+
+write.csv(gmv_percentiles, paste0(root, "summary_data/gmv_percentiles.csv"))
+
+```
+
+
+
+# Overall Correlation Trajectory
+## GMV
+```{r}
+
+
+calculate_correlation_formatted <- function(data) {
+  cor_test <- cor.test(data$age, data$kdm)
+  p_value_formatted <- ifelse(cor_test$p.value < 0.05, "p < 0.05", sprintf("p = %.3f", cor_test$p.value))
+  
+  # Accessing the degrees of freedom from the cor.test result
+  df <- cor_test$parameter
+  
+  return(list(correlation = cor_test$estimate, p_value = p_value_formatted, df = df))
+}
+
+# Separate data by sex and calculate correlations
+male_data <- kdm_data_gmv_sub_long_comp %>% filter(sex == 1)
+female_data <- kdm_data_gmv_sub_long_comp %>% filter(sex == 2)
+
+male_cor <- calculate_correlation_formatted(male_data)
+male_cor$df
+female_cor <- calculate_correlation_formatted(female_data)
+combined_cor <- calculate_correlation_formatted(kdm_data_gmv_sub_long_comp)
+combined_cor$df
+
+# Plot with age on x-axis and kdm on y-axis
+print(ggplot(kdm_data_gmv_sub_long_comp %>% filter(!is.na(sex)),
+             aes(x = age, y = kdm, color = as.factor(sex))) +
+        geom_point(alpha = 0.5) +
+        geom_smooth(method = "lm", se = FALSE, aes(fill = as.factor(sex)), alpha = 0.3) +
+        scale_color_manual(values = c("1" = "blue", "2" = "red"), 
+                           labels = c("Male", "Female")) +  # Add legend for sex with custom labels
+        labs(title = "Scatterplot of Chronological Age on Brain Development Index", 
+             x = "Chronological Age", y = "Brain Development Index") +
+        theme_minimal() +
+        theme(legend.position = "bottom",  # Move legend to the bottom
+              plot.title = element_text(hjust = 0.5, size = 16),  # Center and increase title size
+              axis.title.x = element_text(size = 14),  # Increase x-axis label size
+              axis.title.y = element_text(size = 14)) +  # Increase y-axis label size
+        guides(fill = FALSE) +  # Remove fill legend
+        guides(color = guide_legend(title = "Sex")) +  # Adjust color legend title
+        annotate("text", x = Inf, y = Inf, 
+                 label = sprintf("Males: r = %.2f, %s\nFemales: r = %.2f, %s\nCombined: r = %.2f, %s", 
+                                 male_cor$correlation, male_cor$p_value, 
+                                 female_cor$correlation, female_cor$p_value, 
+                                 combined_cor$correlation, combined_cor$p_value), 
+                 hjust = 1, vjust = 1, size = 3.5, color = "black"))
+
+
+# Save the plot as a PNG file
+ggsave("plot.png", plot = last_plot(), width = 8, height = 6, dpi = 300)
+
+
+```
+
+
+## BBB
+```{r}
+
+# Calculate correlation and format p-value
+calculate_correlation_formatted <- function(data) {
+  cor_test <- cor.test(data$age, data$kdm)
+  p_value_formatted <- ifelse(cor_test$p.value < 0.05, "p < 0.05", sprintf("p = %.3f", cor_test$p.value))
+  return(list(correlation = cor_test$estimate, p_value = p_value_formatted))
+}
+
+# Separate data by sex and calculate correlations
+male_data <- kdm_data_bbb_sub_long %>% filter(sex == "M")
+female_data <- kdm_data_bbb_sub_long %>% filter(sex == "F")
+
+male_cor <- calculate_correlation_formatted(male_data)
+female_cor <- calculate_correlation_formatted(female_data)
+combined_cor <- calculate_correlation_formatted(kdm_data_bbb_sub_long)
+
+# Plot with age on x-axis and kdm on y-axis
+ggplot(kdm_data_bbb_sub_long %>% filter(!is.na(sex)),
+       aes(x = age, y = kdm, color = as.factor(sex))) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE, aes(fill = as.factor(sex)), alpha = 0.3) +
+  scale_color_manual(values = c("M" = "blue", "F" = "red")) +
+  labs(title = "Regression of Age on KDM by Sex", x = "Age", y = "KDM") +
+  theme_minimal() +
+  theme(legend.position = "none") + # Remove gradient legend
+  annotate("text", x = Inf, y = Inf, label = sprintf("Males: r = %.2f, %s\nFemales: r = %.2f, %s\nCombined: r = %.2f, %s", 
+            male_cor$correlation, male_cor$p_value, 
+            female_cor$correlation, female_cor$p_value, 
+            combined_cor$correlation, combined_cor$p_value), 
+           hjust = 1, vjust = 1, size = 3.5, color = "black")
+
+```
+
+# Tertiles
+```{r}
+kdm_gmv_base_tert <- split_into_tertiles(kdm_data_gmv_sub_base, c("kdm", "kdm_advance"))
+kdm_gmv_2year_tert <- split_into_tertiles(kdm_data_gmv_sub_2year, c("kdm", "kdm_advance"))
+kdm_gmv_4year_tert <- split_into_tertiles(kdm_data_gmv_sub_4year, c("kdm", "kdm_advance"))
+
+kdm_bbb_2year_tert <- split_into_tertiles(kdm_data_bbb_all %>% 
+                                            filter(eventname == "2_year_follow_up_y_arm_1"), 
+                                          c("kdm", "kdm_advance"))
+
+kdm_bbb_3year_tert <- split_into_tertiles(kdm_data_bbb_all %>% 
+                                            filter(eventname == "3_year_follow_up_y_arm_1"), 
+                                          c("kdm", "kdm_advance"))
+
+kdm_bbb_4year_tert <- split_into_tertiles(kdm_data_bbb_all %>% 
+                                            filter(eventname == "4_year_follow_up_y_arm_1"), 
+                                          c("kdm", "kdm_advance"))
+
+```
+
+
+# Write Files
+```{r}
+# All gmv and bbb merged and cleaned
+gmv_bbb_all <- gmv_bbb_all %>% select(-contains("phys_ment_health"))
+gmv_bbb_all
+
+
+gmv_bbb_all_wide <- pivot_wider(gmv_bbb_all, 
+                       names_from = eventname, 
+                       values_from = c(age_gmv, age_gmv_round, kdm_gmv, kdm_advance_gmv, 
+                                       age_bbb, age_bbb_round, kdm_bbb, kdm_advance_bbb),
+                       names_sep = "_")
+
+write.csv(gmv_bbb_all, paste0(root, "summary_data/gmv_bbb_all.csv"))
+write.csv(gmv_bbb_all_wide, paste0(root, "summary_data/gmv_bbb_all_wide.csv"))
+
+```
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,506 @@
+---
+title: "BNA_Organ_KDM"
+format:
+  html: 
+    theme: cosmo
+    fontsize: 1.1em
+    linestretch: 1.7
+toc: true
+editor: visual
+---
+
+This file runs Bayesian Network Analyses to see the effect on organ KDM, Bio Age and Brain Age on each other.
+
+Input: All DF's
+
+Output: Bayesian Network Analyses results
+
+# Read in Libraries
+
+```{r}
+#install.packages("flexsurv")
+#devtools::install_github("dayoonkwon/BioAge")
+#| warning: false
+
+root <- "/Users/hansoochang/Drexel/ABCD/"
+
+
+library(BioAge)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(Metrics)
+library(stats)
+library(skimr)
+library(pcaPP)
+library(stringr)
+library(stats)
+library(misty)
+library(emmeans)
+library(LSD)
+library(ggtext)
+library(patchwork)
+library(tidyverse)
+library(lavaan)
+library(semTools)
+library(semPlot)
+library(bnstruct)
+library(bnlearn)
+# install.packages("BiocManager")
+# BiocManager::install("Rgraphviz")
+#library(Rgraphviz)
+
+```
+
+# Read in Data
+
+```{r}
+all_kdm_sem_base <- read.csv(paste0(root, "Version5.0_Exported_Data/all_kdm_sem_base.csv"))
+all_kdm_sem_gmv_4 <- read.csv(paste0(root, "Version5.0_Exported_Data/all_kdm_sem_gmv_4.csv"))
+
+all_kdm_sem_base_onlyAdvance <- all_kdm_sem_base %>% select(contains("advance"))
+all_kdm_sem_gmv_4_onlyAdvance <- all_kdm_sem_gmv_4 %>% select(contains("advance"))
+
+thk_base_data <- read.csv(paste0(root, "Version5.0_Exported_Data/kdm_data_thk_sub.csv"))
+thk_2year_data <- read.csv(paste0(root, "Version5.0_Exported_Data/thk_2year_data.csv"))
+thk_4year_data <- read.csv(paste0(root, "Version5.0_Exported_Data/thk_4year_data.csv"))
+
+gmv_thk_base_data <- read.csv(paste0(root, "Version5.0_Exported_Data/kdm_data_gmv_thk_sub.csv"))
+gmv_thk_2year_data <- read.csv(paste0(root, "Version5.0_Exported_Data/gmv_thk_2year_data.csv"))
+gmv_thk_4year_data <- read.csv(paste0(root, "Version5.0_Exported_Data/gmv_thk_4year_data.csv"))
+
+
+# Baseline
+cv <- read.csv(paste0(root, "Version5.0_Exported_Data/cv_kdm.csv"))
+of <- read.csv(paste0(root, "Version5.0_Exported_Data/of_kdm.csv"))
+ms <- read.csv(paste0(root, "Version5.0_Exported_Data/ms_kdm.csv"))
+im <- read.csv(paste0(root, "Version5.0_Exported_Data/im_kdm.csv"))
+mb <- read.csv(paste0(root, "Version5.0_Exported_Data/mb_kdm.csv"))
+
+cv_4 <- read.csv(paste0(root, "Version5.0_Exported_Data/cv_4.csv"))
+of_4 <- read.csv(paste0(root, "Version5.0_Exported_Data/of_4.csv"))
+ms_4 <- read.csv(paste0(root, "Version5.0_Exported_Data/ms_4.csv"))
+im_4 <- read.csv(paste0(root, "Version5.0_Exported_Data/im_4.csv"))
+mb_4 <- read.csv(paste0(root, "Version5.0_Exported_Data/mb_4.csv"))
+
+whole_body <- read.csv(paste0(root, "Version5.0_Exported_Data/kdm_data_bbb_sub.csv"))
+
+kdm_data_bbb_sub_base <- read.csv(paste0(root, "Version5.0_Exported_Data/kdm_data_bbb_sub.csv"))
+kdm_data_bbb_sub_3year <- read.csv(paste0(root, "summary_data/kdm_data_bbb_sub_3year.csv"))
+kdm_data_bbb_sub_4year <- read.csv(paste0(root, "summary_data/kdm_data_bbb_sub_4year.csv"))
+
+
+kdm_data_gmv_sub_base <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub.csv"))
+# Brainage 2 year
+kdm_data_gmv_sub_2year <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub_2year.csv"))
+
+# Brainage 4 year
+kdm_data_gmv_sub_4year <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub_4year.csv"))
+
+
+```
+
+# Get Change scores from 2 to 4 years
+
+```{r}
+
+# merge_and_diff <- function(df1, df2) {
+#   
+#   # Check if 'subjectkey' column exists in df1
+#   if (!"subjectkey" %in% colnames(df1)) {
+#     df1$subjectkey <- df1$src_subject_id
+#   }
+#   
+#   # Check if 'subjectkey' column exists in df2
+#   if (!"subjectkey" %in% colnames(df2)) {
+#     df2$subjectkey <- df2$src_subject_id
+#   }
+#    
+#   
+# # Get the name of the second dataframe
+#   df2_name <- deparse(substitute(df2))
+# 
+#   # Rename kdm column in df2 to "kdm_df2name"
+#   colnames(df2)[colnames(df2) == "kdm"] <- paste0("kdm_", df2_name)
+#   
+#   # Merge the dataframes by 'subjectkey' and 'eventname'
+#   merged_df <- inner_join(df1, df2, by = c("subjectkey"))
+#   
+#   # Compute the difference between 'kdm' and 'kdm_df2name'
+#   merged_df$kdm_diff <- merged_df[[paste0("kdm_", df2_name)]] - merged_df$kdm
+#   
+#   # Select only the required columns
+#   result <- merged_df %>%
+#     select(subjectkey,kdm_diff)
+#   
+#   return(result)
+# }
+# 
+#   
+# merge_and_diff(thk_base_data, thk_4year_data)
+
+```
+
+# Merge Dataframes into wide format
+
+## Baseline
+
+```{r}
+thk_2year_data$subjectkey <- thk_2year_data$src_subject_id
+
+thk_2year_data_selected <- thk_2year_data %>%
+  select(subjectkey, eventname, sex, interview_age, kdm, kdm_advance) %>%
+  mutate(
+    kdm_thk = kdm,
+    kdm_advance_thk = kdm_advance
+  ) %>%
+  select(-kdm, -kdm_advance) %>%
+  mutate(sex = recode(sex, `1` = "M", `2` = "F"))
+
+
+gmv_thk_2year_data$subjectkey <- gmv_thk_2year_data$src_subject_id
+
+gmv_thk_2year_data_selected <- gmv_thk_2year_data %>%
+  select(subjectkey, eventname, sex, interview_age, kdm, kdm_advance) %>%
+  mutate(
+    kdm_gmv_thk = kdm,
+    kdm_advance_gmv_thk = kdm_advance
+  ) %>%
+  select(-kdm, -kdm_advance) %>%
+  mutate(sex = recode(sex, `1` = "M", `2` = "F"))
+
+
+# Merge the dataframes by subjectkey and eventname
+all_kdm_sem_2y <- all_kdm_sem_base %>%
+   rename_with(~ gsub("\\.x$", "", .x)) %>%
+  full_join(thk_2year_data_selected, by = c("subjectkey", "eventname", "sex")) %>%
+  full_join(gmv_thk_2year_data_selected, by = c("subjectkey", "eventname", "sex"))
+
+all_kdm_sem_2y_onlyAdvance <- all_kdm_sem_2y %>% 
+   select(-contains("kdm_advance")) %>% 
+   select(contains("kdm"))
+
+all_kdm_sem_2y_onlyAdvance <- all_kdm_sem_2y_onlyAdvance %>%
+  rename(Cardiovascular = kdm_cv, 
+         `Organ Function` = kdm_of, 
+         Musculoskeletal = kdm_ms,
+         Immune = kdm_im,
+         Metabolic = kdm_mb,
+         `BIO-DI` = kdm_bioage,
+         `BRAIN-DI` = kdm_gmv,
+         `Cortical Volume and Thickness`= kdm_gmv_thk,
+         `Cortical Thickness` = kdm_thk)
+
+
+```
+
+## 4 year
+
+```{r}
+
+# thk_4year_data$subjectkey <- thk_4year_data$src_subject_id
+# 
+# thk_4year_data_selected <- thk_4year_data %>%
+#   select(subjectkey, eventname, sex, interview_age, kdm, kdm_advance) %>%
+#   mutate(
+#     kdm_thk = kdm,
+#     kdm_advance_thk = kdm_advance
+#   ) %>%
+#   select(-kdm, -kdm_advance) %>%
+#   mutate(sex = recode(sex, `1` = "M", `2` = "F"))
+# 
+# 
+# gmv_thk_4year_data$subjectkey <- gmv_thk_4year_data$src_subject_id
+# 
+# gmv_thk_4year_data_selected <- gmv_thk_4year_data %>%
+#   select(subjectkey, eventname, sex, interview_age, kdm, kdm_advance) %>%
+#   mutate(
+#     kdm_gmv_thk = kdm,
+#     kdm_advance_gmv_thk = kdm_advance
+#   ) %>%
+#   select(-kdm, -kdm_advance) %>%
+#   mutate(sex = recode(sex, `1` = "M", `2` = "F"))
+# 
+# 
+# # Merge the dataframes by subjectkey and eventname
+# all_kdm_sem_4y <- all_kdm_sem_gmv_4 %>%
+#    rename_with(~ gsub("\\.x$", "", .x)) %>%
+#   full_join(gmv_thk_4year_data_selected, by = c("subjectkey", "eventname", "sex"))
+# 
+# 
+# all_kdm_sem_4y_onlyAdvance <- all_kdm_sem_4y %>% 
+#    select(-contains("kdm_advance")) %>% 
+#    select(contains("kdm"))
+# 
+# all_kdm_sem_4y_onlyAdvance
+
+```
+
+# Calculate Difference Scores
+
+## Read in all future timepoints
+
+```{r}
+kdm_data_bbb_all <- read.csv(paste0(root, "summary_data/kdm_data_bbb_all.csv"))
+kdm_data_gmv_sub_long <- read.csv(paste0(root, "summary_data/kdm_data_gmv_sub_long.csv"))
+
+
+```
+
+# Forced Network
+
+## Baseline
+
+```{r}
+#| warning: false
+# 
+# # Define DAG
+# dag_str <- '[kdm_advance_brainage|kdm_advance_bioage][kdm_advance_bioage|kdm_advance_cv:kdm_advance_of:kdm_advance_ms:kdm_advance_im:kdm_advance_mb][kdm_advance_cv][kdm_advance_of][kdm_advance_ms][kdm_advance_im][kdm_advance_mb]'
+# dag <- model2network(dag_str)
+# 
+# # P-values
+# pv_dag <- arc.strength(dag, all_kdm_sem_base_onlyAdvance)
+# strength.plot(dag, strength = pv_dag, main = "pvalues", fontsize = 30)
+# # Deltas (BIC)
+# deltas_dag <- arc.strength(dag, data = all_kdm_sem_base_onlyAdvance %>% na.omit,
+#                            criterion = "bic-g")
+# strength.plot(dag, strength = deltas_dag, main = "score.deltas", fontsize = 30)
+# 
+# # Log-Likelihood Loss
+# # Compare this with learned model
+# bn.cv(all_kdm_sem_base_onlyAdvance, dag, algorithm.args = list(score = "bic"))
+# 
+# 
+# # Learn Parameters using Bayesian Parameter Learning
+# # (Assuming all nodes represent continuous variables and follow Gaussian distributions)
+# fitted_dag <- bn.fit(dag, data = all_kdm_sem_base_onlyAdvance, method = "mle-g")
+# fitted_dag
+```
+
+## 4 Year
+
+```{r}
+# #| warning: false
+# 
+# # Define DAG
+# dag_str <- '[kdm_advance_brainage|kdm_advance_bioage][kdm_advance_bioage|kdm_advance_cv:kdm_advance_of:kdm_advance_ms:kdm_advance_im:kdm_advance_mb][kdm_advance_cv][kdm_advance_of][kdm_advance_ms][kdm_advance_im][kdm_advance_mb]'
+# dag <- model2network(dag_str)
+# 
+# # P-values
+# pv_dag <- arc.strength(dag, all_kdm_sem_gmv_4_onlyAdvance)
+# strength.plot(dag, strength = pv_dag, main = "pvalues")
+# # Deltas (BIC)
+# deltas_dag <- arc.strength(dag, data = all_kdm_sem_gmv_4_onlyAdvance %>% na.omit, 
+#                            criterion = "bic-g") 
+# strength.plot(dag, strength = deltas_dag, main = "score.deltas")
+# 
+# # Log-Likelihood Loss
+# # Compare this with learned model
+# bn.cv(all_kdm_sem_base_onlyAdvance, dag, algorithm.args = list(score = "bic"))
+# 
+# 
+# # Learn Parameters using Bayesian Parameter Learning
+# # (Assuming all nodes represent continuous variables and follow Gaussian distributions)
+# fitted_dag <- bn.fit(dag, data = all_kdm_sem_gmv_4_onlyAdvance, method = "mle-g")
+# fitted_dag
+```
+
+# Learned Parameters
+
+## Learning Parameters
+
+```{r}
+#| warning: false
+
+# Learn the Network Structure from Data using the Grow-Shrink Algorithm
+# Baseline 
+bn.gs <- gs(all_kdm_sem_2y_onlyAdvance)
+bn.iamb <- iamb(all_kdm_sem_2y_onlyAdvance)
+bn.fast.iamb <- fast.iamb(all_kdm_sem_2y_onlyAdvance)
+bn.inter.iamb <- inter.iamb(all_kdm_sem_2y_onlyAdvance)
+bn.mmpc <- mmpc(all_kdm_sem_2y_onlyAdvance)
+
+
+# Baseline to 4 year
+bn.gs.4y <- gs(all_kdm_sem_gmv_4_onlyAdvance)
+bn.iamb.4y <- iamb(all_kdm_sem_gmv_4_onlyAdvance)
+bn.fast.iamb.4y <- fast.iamb(all_kdm_sem_gmv_4_onlyAdvance)
+bn.inter.iamb.4y <- inter.iamb(all_kdm_sem_gmv_4_onlyAdvance)
+bn.mmpc.4y <- mmpc(all_kdm_sem_gmv_4_onlyAdvance)
+
+```
+
+## Visual Comparison
+
+### Baseline
+
+```{r}
+#| warning: false
+
+plot(bn.gs, main = "Grow-Shrink")
+plot(bn.iamb, main = "IAMB")
+plot(bn.fast.iamb, main = "Fast IAMB")
+plot(bn.inter.iamb, main = "Interleaved IAMB")
+
+
+```
+
+### Baseline to 4 year
+
+```{r}
+#| warning: false
+
+plot(bn.gs.4y, main = "Grow-Shrink")
+plot(bn.iamb.4y, main = "IAMB")
+plot(bn.fast.iamb.4y, main = "Fast IAMB")
+plot(bn.inter.iamb.4y, main = "Interleaved IAMB")
+```
+
+## Choosing Learning Strategy
+
+Cross-validation is a standard way to obtain unbiased estimates of a model's goodness of fit. By comparing such estimates for different learning strategies (different combinations of learning algorithms, fitting techniques and the respective parameters) we can choose the optimal one for the data at hand in a principled way. \### Baseline
+
+```{r}
+#| warning: false
+
+# bn.cv.gs <- bn.cv(data = all_kdm_sem_2y_onlyAdvance %>% na.omit, bn = "gs", runs = 10, k = 3)
+# bn.cv.iamb <- bn.cv(data = all_kdm_sem_2y_onlyAdvance %>% na.omit, bn = "iamb", runs = 10, k = 3)
+# bn.cv.fast.iamb <- bn.cv(data = all_kdm_sem_2y_onlyAdvance %>% na.omit, 
+#                          bn = "fast.iamb", runs = 10, k = 3)
+# bn.cv.inter.iamb <- bn.cv(data = all_kdm_sem_2y_onlyAdvance %>% na.omit, 
+#                   bn = "inter.iamb", runs = 10, k = 2)
+# 
+# plot(bn.cv.gs, bn.cv.iamb, bn.cv.fast.iamb, bn.cv.inter.iamb, 
+#      xlab = c("gs", "iamb", "fast.iamb", "inter.iamb"))
+```
+
+It seems that gs has the highest log-likelihood loss and with the most stable variance.
+
+### Baseline to 4 year
+
+```{r}
+#| warning: false
+
+# bn.cv.gs.4y <- bn.cv(data = all_kdm_sem_gmv_4_onlyAdvance %>% na.omit, bn = "gs", runs = 10, k = 5)
+# bn.cv.iamb.4y <- bn.cv(data = all_kdm_sem_gmv_4_onlyAdvance %>% na.omit, bn = "iamb", runs = 10, k = 5)
+# bn.cv.fast.iamb.4y <- bn.cv(data = all_kdm_sem_gmv_4_onlyAdvance %>% na.omit, 
+#                          bn = "fast.iamb", runs = 10, k = 5)
+# bn.cv.inter.iamb.4y <- bn.cv(data = all_kdm_sem_gmv_4_onlyAdvance %>% na.omit, 
+#                   bn = "inter.iamb", runs = 10, k = 5)
+# 
+# plot(bn.cv.gs.4y, bn.cv.iamb.4y, bn.cv.fast.iamb.4y, bn.cv.inter.iamb.4y, 
+#      xlab = c("gs", "iamb", "fast.iamb", "inter.iamb"))
+```
+
+Generally, the resulst are pretty close, but gs seems to be have the most stable and lowest log-likelihood loss
+
+## Set Direction of Undirected Arcs
+
+### Baseline
+
+```{r}
+library(gt)
+library(webshot2)
+#| warning: false
+
+node_order <- nodes(bn.iamb)
+bn.iamb.dag <- pdag2dag(bn.iamb, ordering = node_order)
+
+# Now you can compute arc strengths:
+pv.iamb.gs <- arc.strength(bn.iamb.dag, data = all_kdm_sem_2y_onlyAdvance)
+
+deltas.iamb.gs <- arc.strength(bn.iamb.dag, 
+                               data = all_kdm_sem_2y_onlyAdvance %>% na.omit, 
+                               criterion = "bic-g") 
+
+strength.plot(bn.iamb.dag, strength = pv.iamb.gs, main = "pvalues", fontsize = 50)
+strength.plot(bn.iamb.dag, strength = deltas.iamb.gs, main = "score.deltas", fontsize = 50)
+
+sorted_deltas <- deltas.iamb.gs %>% 
+  arrange(strength) %>%
+  filter(strength < 0) %>% 
+  mutate(rounded_strength = round(strength, 2)) %>%
+  select(-strength)
+
+sorted_deltas
+
+# Create a gt table
+tbl <- sorted_deltas %>%
+  gt() %>%
+  tab_header(
+    title = md("**Arc Strength by BIC**")
+  ) %>%
+  cols_label(
+    rounded_strength = "Strength (BIC Value)"
+  ) %>%
+  fmt_number(
+    columns = vars(rounded_strength),
+    decimals = 1
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels()
+  )
+
+tbl
+
+gtsave(tbl, filename = "ArcStrengthTable.png")
+# Log-Likelihood Loss
+# Compare this with Forced Model
+bn.cv(all_kdm_sem_2y_onlyAdvance, bn.iamb.set, algorithm.args = list(score = "aic"), 
+      loss.args = list("logl-g"), k = 3)
+# bn.cv(all_kdm_sem_2y_onlyAdvance, dag, algorithm.args = list(score = "aic"), 
+#       loss.args = list("logl-g"), k = 3)
+```
+
+There's not much difference between the learned model and the forced model
+
+```{r}
+library(tidygraph)
+library(ggraph)
+library(igraph)
+# Convert bn.iamb.set to an igraph object
+graph <- as.igraph(bn.iamb.set)
+
+# Calculate edge weights for the graph based on arc strengths
+# You might need to adjust this depending on how your arc strengths are structured
+edge_weights <- deltas.iamb.gs
+
+# Set up the layout for the graph
+layout <- create_layout(graph, layout = "graphopt")  # You can choose different layouts
+
+# Plot the graph using ggraph
+ggraph(graph, layout = layout) +
+  geom_edge_link(arrow = arrow(length = unit(4, 'mm')), 
+                 end_cap = circle(3, 'mm')) +
+  geom_node_point(size = 5) +
+  geom_node_text(aes(label = name), size = 8) +  # Customize node label size
+  labs(title = "Custom Title for Bayesian Network", subtitle = "Strength of Connections") +
+  theme_graph()
+```
+
+### Baseline to 4 year
+
+```{r}
+#| warning: false
+
+bn.gs.4y.set <- cextend(bn.gs.4y)
+plot(bn.gs.4y.set)
+
+pv.bn.gs.4y <- arc.strength(bn.gs.4y.set, data = all_kdm_sem_gmv_4_onlyAdvance)
+deltas.bn.gs.4y <- arc.strength(bn.gs.4y.set, 
+                             data = all_kdm_sem_gmv_4_onlyAdvance %>% na.omit, 
+                           criterion = "bic-g") 
+
+strength.plot(bn.gs.4y.set, strength = pv.bn.gs.4y, main = "pvalues", fontsize = 30)
+strength.plot(bn.gs.4y.set, strength = deltas.bn.gs.4y, main = "score.deltas", fontsize = 30)
+
+# Log-Likelihood Loss
+# Compare this with Forced Model
+bn.cv(all_kdm_sem_gmv_4_onlyAdvance, bn.gs.4y.set, algorithm.args = list(score = "aic"), 
+      loss.args = list("logl-g"), k = 5)
+# bn.cv(all_kdm_sem_gmv_4_onlyAdvance, dag, algorithm.args = list(score = "aic"), 
+#       loss.args = list("logl-g"), k = 5)
+```
+
+Not much difference in expected loss either
